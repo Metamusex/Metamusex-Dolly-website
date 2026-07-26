@@ -125,10 +125,15 @@
   a.trait-chip.missing:hover { background: var(--yellow); }
   .trait-chip.missing { color: var(--grey); border-color: var(--grey); }
   .trait-block { margin-bottom: 28px; }
-  .trait-block-header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .trait-block-header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; cursor: pointer; user-select: none; }
+  .trait-block-header:hover .trait-block-title { text-decoration: underline; }
   .trait-block-title { font-weight: 700; font-size: 16px; }
-  .trait-block-pct { font-size: 12px; color: #6b6b70; white-space: nowrap; }
+  .trait-block-pct { font-size: 12px; color: #6b6b70; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
+  .trait-block-chevron { display: inline-block; font-family: 'Space Mono', monospace; font-size: 11px; transition: transform 0.2s ease; }
+  .trait-block.expanded .trait-block-chevron { transform: rotate(180deg); }
   .trait-progress-bar { height: 14px; background: var(--paper); border: 2px solid var(--ink); border-radius: 999px; overflow: hidden; margin-bottom: 12px; }
+  .trait-block-content { overflow: hidden; max-height: 0; opacity: 0; transition: max-height 0.25s ease, opacity 0.2s ease; }
+  .trait-block.expanded .trait-block-content { max-height: 3000px; opacity: 1; }
   .trait-progress-fill { height: 100%; background: var(--pink); border-radius: 999px 0 0 999px; }
   .back-link { display: inline-block; margin-bottom: 14px; font-family: 'Space Mono', monospace; font-size: 13px; text-decoration: underline; cursor: pointer; }
   .badge-row { display: flex; flex-wrap: wrap; gap: 22px; justify-content: center; padding: 10px 0 30px; }
@@ -465,6 +470,16 @@ const airdropPage = document.getElementById("airdropPage");
 let lastTraitsMeta = null;
 let lastBadgeData = null;
 let lastUnlockedBadges = [];
+
+// Click delegato per i blocchi trait/serie collassabili: funziona anche sui
+// blocchi (ri)generati dinamicamente dopo il caricamento dell'album, senza
+// dover riattaccare listener ogni volta che si ricostruisce l'HTML.
+document.addEventListener("click", (e) => {
+  const header = e.target.closest(".trait-block-header");
+  if (!header) return;
+  const block = header.closest(".trait-block");
+  if (block) block.classList.toggle("expanded");
+});
 
 connectBtn.addEventListener("click", connectWallet);
 connectMobileBtn.addEventListener("click", connectWalletMobile);
@@ -962,6 +977,14 @@ function ownableItemCardHtml(chain, icon, item, owned) {
     : `<div class="airdrop-item-card locked">${inner}</div>`;
 }
 
+// Apre di default il primo blocco trait/serie di un contenitore, così
+// l'utente vede subito che c'è contenuto invece di trovare tutto chiuso.
+function openFirstTraitBlock(container) {
+  if (!container) return;
+  const first = container.querySelector(".trait-block");
+  if (first) first.classList.add("expanded");
+}
+
 function getSeriesForItem(groupKey, item) {
   const map = SPECIAL_SERIES[groupKey];
   if (!map) return null;
@@ -1012,7 +1035,7 @@ function renderGroupPages(byGroup, traitsMeta, badgeData) {
         const ownedCount = tp.values.filter((v) => owned.has(normTraitValue(v))).length;
         const pct = total > 0 ? Math.round((ownedCount / total) * 100) : 0;
         const chips = tp.values.map((v) => traitChipHtml(group.slug, tp.trait_type, v, owned.has(normTraitValue(v)))).join("");
-        return `<div class="trait-block"><div class="trait-block-header"><span class="trait-block-title">${tp.title}</span><span class="trait-block-pct mono">${ownedCount}/${total} &middot; ${pct}%</span></div><div class="trait-progress-bar"><div class="trait-progress-fill" style="width:${pct}%"></div></div><div class="trait-list">${chips}</div></div>`;
+        return `<div class="trait-block"><div class="trait-block-header"><span class="trait-block-title">${tp.title}</span><span class="trait-block-pct mono">${ownedCount}/${total} &middot; ${pct}% <span class="trait-block-chevron">▾</span></span></div><div class="trait-progress-bar"><div class="trait-progress-fill" style="width:${pct}%"></div></div><div class="trait-block-content"><div class="trait-list">${chips}</div></div></div>`;
       }).join("");
 
       const normMeta = getNormalizedTraitsMeta(traitsMeta && traitsMeta[group.key]);
@@ -1031,12 +1054,12 @@ function renderGroupPages(byGroup, traitsMeta, badgeData) {
           const ownedCount = allValues.filter((v) => owned.has(v)).length;
           const pct = total > 0 ? Math.round((ownedCount / total) * 100) : 0;
           const chips = allValues.map((v) => traitChipHtml(group.slug, traitType, v, owned.has(v))).join("");
-          return `<div class="trait-block"><div class="trait-block-header"><span class="trait-block-title">${traitType}</span><span class="trait-block-pct mono">${ownedCount}/${total} &middot; ${pct}%</span></div><div class="trait-progress-bar"><div class="trait-progress-fill" style="width:${pct}%"></div></div><div class="trait-list">${chips}</div></div>`;
+          return `<div class="trait-block"><div class="trait-block-header"><span class="trait-block-title">${traitType}</span><span class="trait-block-pct mono">${ownedCount}/${total} &middot; ${pct}% <span class="trait-block-chevron">▾</span></span></div><div class="trait-progress-bar"><div class="trait-progress-fill" style="width:${pct}%"></div></div><div class="trait-block-content"><div class="trait-list">${chips}</div></div></div>`;
         }
         missingTraitsNote = true;
         const values = Array.from(owned).sort();
         const chips = values.map((v) => `<div class="trait-chip">✅ ${v}</div>`).join("");
-        return `<div class="trait-block"><div class="trait-block-header"><span class="trait-block-title">${traitType}</span><span class="trait-block-pct mono">${values.length} owned value${values.length === 1 ? "" : "s"}</span></div><div class="trait-list">${chips}</div></div>`;
+        return `<div class="trait-block"><div class="trait-block-header"><span class="trait-block-title">${traitType}</span><span class="trait-block-pct mono">${values.length} owned value${values.length === 1 ? "" : "s"} <span class="trait-block-chevron">▾</span></span></div><div class="trait-block-content"><div class="trait-list">${chips}</div></div></div>`;
       }).join("");
 
       if (traitBlocks) {
@@ -1065,6 +1088,7 @@ function renderGroupPages(byGroup, traitsMeta, badgeData) {
       ${group.special && !SPECIAL_SERIES[group.key] ? `<div class="section-title" style="margin-top:32px;">Browse &amp; Buy Missing Pieces <div class="bar"></div></div><div class="airdrop-grid" id="special-full-${group.key}"><div class="mono">Loading full collection...</div></div>` : ""}
     `;
     traitViewsEl.appendChild(page);
+    openFirstTraitBlock(page);
   });
 
   traitViewsEl.querySelectorAll("[data-back]").forEach((el) => el.addEventListener("click", hideTraitPages));
@@ -1087,9 +1111,10 @@ async function loadSeriesImages(byGroup) {
       const ownedCount = seriesItems.filter((i) => ownedIds.has(String(i.identifier))).length;
       const cards = seriesItems.map((item) => ownableItemCardHtml(group.chain, group.icon, item, ownedIds.has(String(item.identifier)))).join("");
       const desc = SERIES_DESCRIPTIONS[series];
-      return `<div class="trait-block"><div class="trait-block-header"><span class="trait-block-title">${series}${desc ? ` <span class="mono" style="font-weight:400; color:#6b6b70;">(${desc})</span>` : ""}</span><span class="trait-block-pct mono">${ownedCount}/${seriesItems.length} owned</span></div><div class="airdrop-grid">${cards}</div></div>`;
+      return `<div class="trait-block"><div class="trait-block-header"><span class="trait-block-title">${series}${desc ? ` <span class="mono" style="font-weight:400; color:#6b6b70;">(${desc})</span>` : ""}</span><span class="trait-block-pct mono">${ownedCount}/${seriesItems.length} owned <span class="trait-block-chevron">▾</span></span></div><div class="trait-block-content"><div class="airdrop-grid">${cards}</div></div></div>`;
     }).join("");
     container.innerHTML = html;
+    openFirstTraitBlock(container);
   }));
 }
 
