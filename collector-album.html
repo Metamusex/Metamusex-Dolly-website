@@ -135,7 +135,16 @@
   .trait-block-content { overflow: hidden; max-height: 0; opacity: 0; transition: max-height 0.25s ease, opacity 0.2s ease; }
   .trait-block.expanded .trait-block-content { max-height: 3000px; opacity: 1; }
   .trait-progress-fill { height: 100%; background: var(--pink); border-radius: 999px 0 0 999px; }
-  .back-link { display: inline-block; margin-bottom: 14px; font-family: 'Space Mono', monospace; font-size: 13px; text-decoration: underline; cursor: pointer; }
+  .back-link {
+    display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px;
+    font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 700;
+    text-decoration: none; cursor: pointer; background: var(--paper);
+    border: 2px solid var(--ink); border-radius: 999px; padding: 9px 18px;
+    box-shadow: var(--shadow-hard-sm); transition: transform 0.08s ease;
+  }
+  .back-link:hover { transform: translate(-1px, -1px); box-shadow: var(--shadow-hard); background: var(--yellow); }
+  .back-link:active { transform: translate(1px, 1px); box-shadow: 0 0 0 var(--ink); }
+  .back-link.bottom { margin: 36px 0 8px; }
   .badge-row { display: flex; flex-wrap: wrap; gap: 22px; justify-content: center; padding: 10px 0 30px; }
   .badge { width: 96px; text-align: center; }
   .badge .medal {
@@ -1406,6 +1415,7 @@ function renderGroupPages(byGroup, traitsMeta, badgeData) {
       ${buildRareTraitsTableHtml(group, badgeData)}
       ${buildGroupBadgesHtml(group, badgeData)}
       ${group.special && !SPECIAL_SERIES[group.key] ? `<div class="section-title" style="margin-top:32px;">Browse &amp; Buy Missing Pieces <div class="bar"></div></div><div class="airdrop-grid" id="special-full-${group.key}"><div class="mono">Loading full collection...</div></div>` : ""}
+      <span class="back-link bottom" data-back="${group.key}">&larr; Back to album</span>
     `;
     traitViewsEl.appendChild(page);
     openFirstTraitBlock(page);
@@ -1710,6 +1720,7 @@ function buildStatsPageHtml(data) {
     <div class="section-title" style="margin-top:32px;">All Badges <div class="bar"></div></div>
     <div class="mono" style="margin-bottom:12px; color:#6b6b70;">${totalBadgesEarned}/${allBadges.length} badges obtained</div>
     <div class="badge-row panel">${allBadges.map((b) => badgeHtml(b.icon, b.label, b.earned, isPrestigeBadge(b.label))).join("")}</div>
+    <span class="back-link bottom" onclick="hideTraitPages()">&larr; Back to album</span>
   `;
 }
 
@@ -1843,6 +1854,7 @@ function renderLeaderboardPage(sortKey) {
     <div class="section-title">Leaderboard <div class="bar"></div></div>
     <div class="mono" style="margin-bottom:14px; color:#6b6b70;">${leaderboardEntries.length} registered wallet${leaderboardEntries.length === 1 ? "" : "s"} (users who've connected to the album, not every on-chain holder). Sorted by: <select id="leaderboardSort" class="mono">${options}</select></div>
     <table class="leaderboard-table"><thead><tr><th></th><th>Wallet</th><th>Badges</th><th>NFTs</th><th>Collections</th><th>Completed</th><th>Album %</th></tr></thead><tbody>${rows}</tbody></table>
+    <span class="back-link bottom" onclick="hideTraitPages()">&larr; Back to album</span>
   `;
   document.getElementById("leaderboardSort").addEventListener("change", (e) => renderLeaderboardPage(e.target.value));
 }
@@ -1876,6 +1888,7 @@ function showBadgeGuidePage() {
     <div class="guide-list">${GENERAL_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div>
     <div class="section-title" style="margin-top:32px; font-size:20px;">Collection Badges <div class="bar"></div></div>
     <div class="guide-list">${COLLECTION_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div>
+    <span class="back-link bottom" onclick="hideTraitPages()">&larr; Back to album</span>
   `;
   mainView.style.display = "none";
   document.querySelectorAll(".trait-page").forEach((p) => p.classList.remove("active"));
@@ -1962,6 +1975,7 @@ async function loadAirdropData() {
     </div>
     ${myAddress ? "" : `<div class="mono">Connect your wallet to see which airdrop pieces you already own.</div>`}
     ${sectionsHtml.join("")}
+    <span class="back-link bottom" onclick="hideTraitPages()">&larr; Back to album</span>
   `;
 }
 </script>
