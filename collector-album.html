@@ -286,6 +286,8 @@
   <div class="badge-unlock-modal panel">
     <div class="badge-unlock-title display">New Badge Unlocked! 🎉</div>
     <div class="badge-unlock-list" id="badgeUnlockList"></div>
+    <div id="badgeUnlockDesc" class="mono" style="font-size: 13px; color: #55555a; margin: -6px 0 18px; display: none;"></div>
+    <div class="mono" style="font-size: 11px; color: #6b6b70; margin: -8px 0 16px;">Sharing downloads a badge image too — attach it to your tweet before posting.</div>
     <div class="badge-unlock-actions">
       <button type="button" class="share-x" id="badgeUnlockShareBtn">𝕏 Share on X</button>
       <button type="button" id="badgeUnlockCloseBtn">Awesome!</button>
@@ -675,17 +677,325 @@ function shareOnX(text) {
 function shareUnlockedBadgesOnX() {
   if (lastUnlockedBadges.length === 0) return;
   const names = lastUnlockedBadges.map((b) => `${b.icon} ${b.label}`).join(", ");
-  const text =
-    lastUnlockedBadges.length === 1
-      ? `I just unlocked the ${names} badge in my MetaMuseX/Dolly Collector Album! ${SHARE_HASHTAGS}`
-      : `I just unlocked ${lastUnlockedBadges.length} new badges in my MetaMuseX/Dolly Collector Album: ${names}! ${SHARE_HASHTAGS}`;
+  let text;
+  if (lastUnlockedBadges.length === 1) {
+    const b = lastUnlockedBadges[0];
+    text = `I just unlocked the ${b.icon} ${b.label} badge in my MetaMuseX/Dolly Collector Album!${b.desc ? ` ${b.desc}` : ""} ${SHARE_HASHTAGS}`;
+  } else {
+    text = `I just unlocked ${lastUnlockedBadges.length} new badges in my MetaMuseX/Dolly Collector Album: ${names}! ${SHARE_HASHTAGS}`;
+  }
+  try {
+    const canvas = buildBadgeShareCanvas(lastUnlockedBadges);
+    downloadCanvasAsPng(canvas, "metamusex-badge.png");
+  } catch (err) {
+    console.warn("Could not generate badge share image:", err);
+  }
   shareOnX(text);
+}
+
+// ==========================================================
+// IMMAGINE STATISTICHE — X non permette di allegare automaticamente
+// un'immagine a un tweet aperto via link (serve OAuth completo, non
+// fattibile per un sito statico senza backend). La soluzione pratica è
+// generare una "card" riassuntiva con Canvas e scaricarla: l'utente la
+// allega poi a mano al tweet, che nel frattempo si apre già con il testo
+// pronto. Tutto il lavoro resta sincrono (niente await prima di
+// window.open) per evitare che i browser blocchino il popup del tweet.
+// ==========================================================
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function buildStatsShareCanvas(data, earned, totalBadges) {
+  const W = 1200, H = 630;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+
+  // Sfondo + puntini decorativi (richiamano lo sfondo del sito)
+  ctx.fillStyle = "#FFF8F0";
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(185,178,164,0.35)";
+  for (let y = 14; y < H; y += 22) {
+    for (let x = 14; x < W; x += 22) {
+      ctx.beginPath();
+      ctx.arc(x, y, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Bordo esterno stile "shadow-hard"
+  ctx.strokeStyle = "#1B1B1F";
+  ctx.lineWidth = 8;
+  ctx.strokeRect(4, 4, W - 8, H - 8);
+
+  // Eyebrow
+  ctx.fillStyle = "#FFC93C";
+  roundRectPath(ctx, 60, 48, 250, 38, 19);
+  ctx.fill();
+  ctx.strokeStyle = "#1B1B1F";
+  ctx.lineWidth = 2;
+  roundRectPath(ctx, 60, 48, 250, 38, 19);
+  ctx.stroke();
+  ctx.fillStyle = "#1B1B1F";
+  ctx.font = "700 14px 'Space Mono', monospace";
+  ctx.textBaseline = "middle";
+  ctx.fillText("COLLECTOR EDITION", 78, 68);
+
+  // Titolo (con leggero effetto ombra colorata, come sul sito)
+  ctx.textBaseline = "alphabetic";
+  ctx.font = "58px 'Bangers', cursive";
+  ctx.fillStyle = "#FF3D7F";
+  ctx.fillText("MY METAMUSEX/DOLLY ALBUM", 64, 168);
+  ctx.fillStyle = "#1B1B1F";
+  ctx.fillText("MY METAMUSEX/DOLLY ALBUM", 60, 164);
+
+  if (currentAddress) {
+    ctx.font = "18px 'Space Mono', monospace";
+    ctx.fillStyle = "#6b6b70";
+    ctx.fillText(shortAddress(currentAddress), 60, 196);
+  }
+
+  // Stat cards
+  const stats = [
+    { label: "ITEMS OWNED", value: String(data.totalOwnedItems) },
+    { label: "COLLECTIONS", value: `${data.groupsOwned.size}/${ALBUM_GROUPS.length}` },
+    { label: "BADGES", value: `${earned}/${totalBadges}` },
+    { label: "CHAINS", value: String(countChainsOwned(data)) },
+  ];
+  const cardW = 246, cardH = 130, gap = 22, startX = 60, startY = 226;
+  stats.forEach((s, i) => {
+    const x = startX + i * (cardW + gap);
+    ctx.fillStyle = "#FFF8F0";
+    roundRectPath(ctx, x, startY, cardW, cardH, 14);
+    ctx.fill();
+    ctx.strokeStyle = "#1B1B1F";
+    ctx.lineWidth = 3;
+    roundRectPath(ctx, x, startY, cardW, cardH, 14);
+    ctx.stroke();
+    ctx.fillStyle = "#FF3D7F";
+    ctx.font = "46px 'Bangers', cursive";
+    ctx.textAlign = "center";
+    ctx.fillText(s.value, x + cardW / 2, startY + 74);
+    ctx.fillStyle = "#6b6b70";
+    ctx.font = "700 12px 'Space Mono', monospace";
+    ctx.fillText(s.label, x + cardW / 2, startY + 104);
+    ctx.textAlign = "left";
+  });
+
+  // Pezzo più raro (se disponibile)
+  const rarest = getRarestOwnedPiece(data);
+  if (rarest) {
+    const ry = 400, rw = cardW * 4 + gap * 3, rh = 92;
+    ctx.fillStyle = "#F1ECE2";
+    roundRectPath(ctx, 60, ry, rw, rh, 14);
+    ctx.fill();
+    ctx.strokeStyle = "#1B1B1F";
+    ctx.lineWidth = 3;
+    roundRectPath(ctx, 60, ry, rw, rh, 14);
+    ctx.stroke();
+    ctx.fillStyle = "#1B1B1F";
+    ctx.font = "700 19px 'Work Sans', sans-serif";
+    ctx.fillText(`🐋 Rarest piece: ${truncateText(ctx, rarest.itemName, rw - 48)}`, 84, ry + 38);
+    ctx.font = "14px 'Space Mono', monospace";
+    ctx.fillStyle = "#6b6b70";
+    ctx.fillText(`${rarest.groupLabel} \u00b7 ${rarest.traitType}: ${rarest.value} \u00b7 only ${rarest.count} in existence`, 84, ry + 66);
+  }
+
+  // Footer hashtag
+  ctx.fillStyle = "#1B1B1F";
+  ctx.font = "700 22px 'Work Sans', sans-serif";
+  ctx.fillText(SHARE_HASHTAGS, 60, H - 40);
+
+  return canvas;
+}
+
+function truncateText(ctx, text, maxWidth) {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let truncated = text;
+  while (truncated.length > 1 && ctx.measureText(truncated + "…").width > maxWidth) {
+    truncated = truncated.slice(0, -1);
+  }
+  return truncated + "…";
+}
+
+// Disegna testo su più righe dentro maxWidth, partendo da (x, y). Ritorna la
+// coordinata y subito dopo l'ultima riga scritta, utile per impilare altri
+// elementi sotto senza sovrapposizioni.
+function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 4) {
+  const words = String(text).split(" ");
+  let line = "";
+  let curY = y;
+  let linesDrawn = 0;
+  for (let n = 0; n < words.length; n++) {
+    const testLine = line + words[n] + " ";
+    if (ctx.measureText(testLine).width > maxWidth && n > 0) {
+      if (linesDrawn === maxLines - 1) {
+        ctx.fillText(truncateText(ctx, line.trim(), maxWidth), x, curY);
+        return curY + lineHeight;
+      }
+      ctx.fillText(line, x, curY);
+      line = words[n] + " ";
+      curY += lineHeight;
+      linesDrawn++;
+    } else {
+      line = testLine;
+    }
+  }
+  ctx.fillText(line.trim(), x, curY);
+  return curY + lineHeight;
+}
+
+// Card condivisibile per uno (o più) badge appena sbloccati: medaglie in
+// evidenza + descrizione di cosa serve per ottenerli, stesso stile visivo
+// della card statistiche.
+function buildBadgeShareCanvas(badges) {
+  const W = 1200, H = 630;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#FFF8F0";
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(185,178,164,0.35)";
+  for (let y = 14; y < H; y += 22) {
+    for (let x = 14; x < W; x += 22) {
+      ctx.beginPath();
+      ctx.arc(x, y, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.strokeStyle = "#1B1B1F";
+  ctx.lineWidth = 8;
+  ctx.strokeRect(4, 4, W - 8, H - 8);
+
+  // Eyebrow
+  ctx.fillStyle = "#FFC93C";
+  roundRectPath(ctx, 60, 46, 250, 38, 19);
+  ctx.fill();
+  ctx.strokeStyle = "#1B1B1F";
+  ctx.lineWidth = 2;
+  roundRectPath(ctx, 60, 46, 250, 38, 19);
+  ctx.stroke();
+  ctx.fillStyle = "#1B1B1F";
+  ctx.font = "700 14px 'Space Mono', monospace";
+  ctx.textBaseline = "middle";
+  ctx.fillText("COLLECTOR EDITION", 78, 66);
+  ctx.textBaseline = "alphabetic";
+
+  // Titolo
+  const title = badges.length === 1 ? "NEW BADGE UNLOCKED!" : `${badges.length} NEW BADGES UNLOCKED!`;
+  ctx.font = "58px 'Bangers', cursive";
+  ctx.fillStyle = "#FF3D7F";
+  ctx.fillText(title, 64, 158);
+  ctx.fillStyle = "#1B1B1F";
+  ctx.fillText(title, 60, 154);
+
+  if (currentAddress) {
+    ctx.font = "18px 'Space Mono', monospace";
+    ctx.fillStyle = "#6b6b70";
+    ctx.fillText(shortAddress(currentAddress), 60, 186);
+  }
+
+  // Medaglie (fino a 4, centrate)
+  const shown = badges.slice(0, 4);
+  const medalSize = 120;
+  const gap = 40;
+  const totalW = shown.length * medalSize + (shown.length - 1) * gap;
+  let startX = (W - totalW) / 2;
+  const medalY = 224;
+  ctx.textAlign = "center";
+  shown.forEach((b) => {
+    const cx = startX + medalSize / 2;
+    const cy = medalY + medalSize / 2;
+    ctx.fillStyle = isPrestigeBadge(b.label) ? "#8B5CF6" : "#2E6DF2";
+    ctx.beginPath();
+    ctx.arc(cx, cy, medalSize / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#1B1B1F";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(cx, cy, medalSize / 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.textBaseline = "middle";
+    ctx.font = "52px sans-serif";
+    ctx.fillStyle = "#fff";
+    ctx.fillText(b.icon, cx, cy + 4);
+    ctx.textBaseline = "alphabetic";
+    ctx.font = "700 13px 'Work Sans', sans-serif";
+    ctx.fillStyle = "#1B1B1F";
+    ctx.fillText(truncateText(ctx, b.name || b.label, medalSize + 30), cx, medalY + medalSize + 26);
+    startX += medalSize + gap;
+  });
+  ctx.textAlign = "left";
+
+  // Descrizione: testo completo se è un solo badge, elenco sintetico se sono più badge
+  const descY = medalY + medalSize + 66;
+  const panelW = W - 120;
+  const panelH = badges.length === 1 ? 108 : Math.min(64 + shown.length * 28, 176);
+  ctx.fillStyle = "#F1ECE2";
+  roundRectPath(ctx, 60, descY, panelW, panelH, 14);
+  ctx.fill();
+  ctx.strokeStyle = "#1B1B1F";
+  ctx.lineWidth = 3;
+  roundRectPath(ctx, 60, descY, panelW, panelH, 14);
+  ctx.stroke();
+
+  ctx.fillStyle = "#1B1B1F";
+  if (badges.length === 1 && badges[0].desc) {
+    ctx.font = "18px 'Work Sans', sans-serif";
+    wrapText(ctx, badges[0].desc, 84, descY + 34, panelW - 48, 26, 3);
+  } else {
+    ctx.font = "600 16px 'Work Sans', sans-serif";
+    let ly = descY + 30;
+    shown.forEach((b) => {
+      ctx.fillText(truncateText(ctx, `${b.icon} ${b.label}`, panelW - 48), 84, ly);
+      ly += 28;
+    });
+    if (badges.length > shown.length) {
+      ctx.font = "14px 'Space Mono', monospace";
+      ctx.fillStyle = "#6b6b70";
+      ctx.fillText(`+ ${badges.length - shown.length} more`, 84, ly);
+    }
+  }
+
+  // Footer hashtag
+  ctx.fillStyle = "#1B1B1F";
+  ctx.font = "700 22px 'Work Sans', sans-serif";
+  ctx.fillText(SHARE_HASHTAGS, 60, H - 30);
+
+  return canvas;
+}
+
+function downloadCanvasAsPng(canvas, filename) {
+  const url = canvas.toDataURL("image/png");
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 function shareStatsOnX(data) {
   const allBadges = getAllBadgesFlat(data);
   const earned = allBadges.filter((b) => b.earned).length;
   const text = `My MetaMuseX/Dolly Collector Album: ${data.totalOwnedItems} NFTs across ${data.groupsOwned.size}/${ALBUM_GROUPS.length} collections, ${earned}/${allBadges.length} badges unlocked! ${SHARE_HASHTAGS}`;
+  try {
+    const canvas = buildStatsShareCanvas(data, earned, allBadges.length);
+    downloadCanvasAsPng(canvas, "metamusex-stats.png");
+  } catch (err) {
+    console.warn("Could not generate stats share image:", err);
+  }
   shareOnX(text);
 }
 
@@ -849,6 +1159,16 @@ function showBadgeUnlockPopup(newBadges) {
   const overlay = document.getElementById("badgeUnlockOverlay");
   const list = document.getElementById("badgeUnlockList");
   list.innerHTML = newBadges.map((b) => badgeHtml(b.icon, b.label, true, isPrestigeBadge(b.label))).join("");
+  const descEl = document.getElementById("badgeUnlockDesc");
+  if (descEl) {
+    if (newBadges.length === 1 && newBadges[0].desc) {
+      descEl.textContent = newBadges[0].desc;
+      descEl.style.display = "block";
+    } else {
+      descEl.textContent = "";
+      descEl.style.display = "none";
+    }
+  }
   overlay.style.display = "flex";
 }
 
@@ -1382,7 +1702,10 @@ function buildStatsPageHtml(data) {
       <div class="stat-card"><div class="stat-value display">${totalBadgesEarned}/${allBadges.length}</div><div class="stat-label mono">Badges Obtained</div></div>
       <div class="stat-card"><div class="stat-value display">${countChainsOwned(data)}</div><div class="stat-label mono">Chains</div></div>
     </div>
-    <div class="share-row"><button type="button" class="share-x" id="shareStatsBtn">𝕏 Share my stats on X</button></div>
+    <div class="share-row" style="flex-direction: column; gap: 8px;">
+      <button type="button" class="share-x" id="shareStatsBtn">𝕏 Share my stats on X</button>
+      <div class="mono" style="font-size: 12px; color: #6b6b70; text-align: center; max-width: 420px;">Downloads a shareable stats image and opens the tweet composer — attach the image to your tweet before posting (X doesn't allow auto-attaching images from a link).</div>
+    </div>
     ${rarest ? `<div class="section-title" style="margin-top:32px;">Rarest Piece Owned <div class="bar"></div></div><div class="panel" style="padding:16px 20px;"><strong>${rarest.itemName}</strong> (${rarest.groupLabel}) — ${rarest.traitType}: ${rarest.value}<span class="mono" style="color:#6b6b70;"> &middot; only ${rarest.count} in existence</span></div>` : ""}
     <div class="section-title" style="margin-top:32px;">All Badges <div class="bar"></div></div>
     <div class="mono" style="margin-bottom:12px; color:#6b6b70;">${totalBadgesEarned}/${allBadges.length} badges obtained</div>
@@ -1423,9 +1746,39 @@ function countAllBadgesEarned(data) {
   return count;
 }
 
+// Recupera la descrizione di un badge generale dal Badge Guide (GENERAL_BADGE_GUIDE),
+// così testo del tweet e immagine condivisa restano sempre allineati alla spiegazione
+// ufficiale mostrata nella pagina "Badge Guide".
+function describeGeneralBadge(label) {
+  const found = GENERAL_BADGE_GUIDE.find((b) => b.name === label);
+  return found ? found.desc : "";
+}
+
+// Stesso principio per i badge di collezione: name è il nome del badge SENZA il
+// prefisso di gruppo (es. "Full Completion", non "🤠 Men: Full Completion").
+function describeGroupBadge(group, name) {
+  if (group.special) {
+    if (name === "Completionist" || name === "Master") {
+      const found = COLLECTION_BADGE_GUIDE.find((b) => b.name.indexOf("Master (special") === 0);
+      return found ? found.desc : "";
+    }
+    const found = COLLECTION_BADGE_GUIDE.find((b) => b.name.indexOf("Series badges") === 0);
+    return found ? found.desc : "";
+  }
+  if (name === "Completionist" || name === "Full Completion" || name === "Rare Find") {
+    const found = COLLECTION_BADGE_GUIDE.find((b) => b.name === name);
+    return found ? found.desc : "";
+  }
+  if (/ Master$/.test(name)) {
+    const traitType = name.replace(/ Master$/, "");
+    return `Own every existing value of the "${traitType}" trait in the ${group.label} collection.`;
+  }
+  return "";
+}
+
 function getAllBadgesFlat(data) {
-  const badges = BADGES.map((b) => ({ icon: b.icon, label: b.label, earned: b.check(data) }));
-  ALBUM_GROUPS.forEach((group) => { getGroupBadges(group, data).forEach((b) => { badges.push({ icon: b.icon, label: `${group.icon} ${group.label}: ${b.label}`, earned: b.earned }); }); });
+  const badges = BADGES.map((b) => ({ icon: b.icon, label: b.label, name: b.label, earned: b.check(data), desc: describeGeneralBadge(b.label) }));
+  ALBUM_GROUPS.forEach((group) => { getGroupBadges(group, data).forEach((b) => { badges.push({ icon: b.icon, label: `${group.icon} ${group.label}: ${b.label}`, name: b.label, earned: b.earned, desc: describeGroupBadge(group, b.label) }); }); });
   return badges;
 }
 
