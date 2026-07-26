@@ -247,7 +247,7 @@
       <button type="button" id="statsBtn" class="secondary">📊 My Stats</button>
       <button type="button" id="airdropBtn" class="secondary">🎁 Airdrop</button>
       <button type="button" id="badgeGuideBtn" class="secondary">📖 Badge Guide</button>
-      <button type="button" id="leaderboardBtn" class="secondary" style="display:none;">👑 Leaderboard</button>
+      <button type="button" id="leaderboardBtn" class="secondary">👑 Leaderboard</button>
     </div>
 
     <div class="progress-section panel" style="margin-top: 24px;">
@@ -315,6 +315,12 @@ const FOUNDER_ADDRESS = "0xD7ac51b7647110064Ff484b1e2961dF4Ad6c0D7b";
 // Trust Wallet, Rainbow, ecc.) via QR code o deep link, oltre al classico
 // wallet da estensione browser (window.ethereum).
 const WALLETCONNECT_PROJECT_ID = "66a078c73dfce6e101e873f5cc6e0e8b";
+
+// URL del Web App di Google Apps Script collegato al Google Sheet che
+// funge da "database" della leaderboard (vedi apps-script.gs incluso
+// insieme a questo file per le istruzioni di deploy). Finché questo
+// valore resta vuoto, la leaderboard mostra solo un avviso di configurazione.
+const LEADERBOARD_API_URL = "https://script.google.com/macros/s/AKfycbwYPL48XHqg6XLuGuX3ICab02CtV73KUvs7JkyMzvd54Br3MwSX1M-jPA4zHFaflDQzyA/exec";
 
 const ALBUM_GROUPS = [
   { key: "girls",   label: "Girls",         icon: "👑", chain: "matic", slug: "metamusex-pfp", traitsUnavailable: true },
@@ -535,7 +541,6 @@ async function onWalletConnected(address) {
   currentAddress = address;
   walletChip.innerHTML = `<div class="wallet-chip"><span class="dot"></span>${shortAddress(currentAddress)}</div>`;
   connectBtn.textContent = "Connected";
-  await registerLeaderboardUser(currentAddress);
   await loadAlbum(currentAddress);
 }
 
@@ -669,26 +674,53 @@ function shareStatsOnX(data) {
   shareOnX(text);
 }
 
-const LEADERBOARD_STORAGE_PREFIX = "leaderboard-user:";
+// ==========================================================
+// LEADERBOARD — dati salvati su Google Sheets tramite un Web App di
+// Google Apps Script (vedi apps-script.gs). Ogni volta che un utente
+// connette il wallet, inviamo (upsert) le sue statistiche già calcolate
+// lato client: la pagina leaderboard poi si limita a leggere lo sheet,
+// senza dover ri-interrogare OpenSea per ogni wallet registrato.
+// ==========================================================
 
-async function registerLeaderboardUser(address) {
+async function submitLeaderboardStats(address, data) {
+  if (!LEADERBOARD_API_URL) return;
   try {
-    if (!window.storage) return;
-    await window.storage.set(`${LEADERBOARD_STORAGE_PREFIX}${address.toLowerCase()}`, JSON.stringify({ lastSeen: Date.now() }), true);
+    const payload = {
+      address: address.toLowerCase(),
+      totalItems: data.totalOwnedItems,
+      collectionsOwned: data.groupsOwned.size,
+      collectionsCompleted: ALBUM_GROUPS.filter((g) => isGroupCompleted(data, g)).length,
+      albumPct: albumCompletionPct(data),
+      totalBadges: countAllBadgesEarned(data),
+      lastSeen: Date.now(),
+    };
+    // Niente header Content-Type esplicito: evita la preflight CORS (OPTIONS)
+    // che Apps Script non gestisce bene di default. Lo script legge comunque
+    // il body come JSON lato server.
+    await fetch(LEADERBOARD_API_URL, { method: "POST", body: JSON.stringify(payload) });
   } catch (err) {
-    console.warn("Could not register wallet for leaderboard (storage unavailable):", err);
+    console.warn("Could not submit leaderboard stats:", err);
   }
 }
 
-async function getRegisteredLeaderboardAddresses() {
+async function fetchLeaderboardEntries() {
+  if (!LEADERBOARD_API_URL) return null;
   try {
-    if (!window.storage) return [];
-    const result = await window.storage.list(LEADERBOARD_STORAGE_PREFIX, true);
-    if (!result || !result.keys) return [];
-    return result.keys.map((k) => k.slice(LEADERBOARD_STORAGE_PREFIX.length));
+    const res = await fetch(LEADERBOARD_API_URL, { method: "GET" });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows)) return null;
+    return rows.map((r) => ({
+      address: String(r.address || "").toLowerCase(),
+      totalItems: Number(r.totalItems) || 0,
+      collectionsOwned: Number(r.collectionsOwned) || 0,
+      collectionsCompleted: Number(r.collectionsCompleted) || 0,
+      albumPct: Number(r.albumPct) || 0,
+      totalBadges: Number(r.totalBadges) || 0,
+    }));
   } catch (err) {
-    console.warn("Could not read registered leaderboard users:", err);
-    return [];
+    console.warn("Could not load leaderboard entries:", err);
+    return null;
   }
 }
 
@@ -761,29 +793,31 @@ async function loadAlbum(address) {
   loadSeriesImages(byGroup);
   loadSpecialFullCollections(byGroup);
 
-  const isFounder = FOUNDER_ADDRESS && address.toLowerCase() === FOUNDER_ADDRESS.toLowerCase();
-  leaderboardBtn.style.display = isFounder ? "inline-block" : "none";
+  // Invia le statistiche aggiornate alla leaderboard condivisa (Google Sheets).
+  submitLeaderboardStats(address, badgeData);
 
   await checkNewlyEarnedBadges(address, badgeData);
 }
 
-const EARNED_BADGES_STORAGE_PREFIX = "earned-badges:";
+// Il tracking di "quali badge avevo già la scorsa visita" (usato solo per
+// mostrare il popup "nuovo badge sbloccato") è dato personale e locale al
+// browser dell'utente: usiamo localStorage, non lo sheet condiviso.
+const EARNED_BADGES_STORAGE_PREFIX = "metamusex-earned-badges:";
 
 async function checkNewlyEarnedBadges(address, badgeData) {
   try {
-    if (!window.storage) return;
     const key = `${EARNED_BADGES_STORAGE_PREFIX}${address.toLowerCase()}`;
     const earnedNowLabels = getAllBadgesFlat(badgeData).filter((b) => b.earned).map((b) => b.label);
 
     let previousLabels = null;
     try {
-      const res = await window.storage.get(key);
-      if (res && res.value) previousLabels = JSON.parse(res.value);
+      const raw = localStorage.getItem(key);
+      if (raw) previousLabels = JSON.parse(raw);
     } catch (err) {
       previousLabels = null;
     }
 
-    await window.storage.set(key, JSON.stringify(earnedNowLabels));
+    localStorage.setItem(key, JSON.stringify(earnedNowLabels));
     if (previousLabels === null) return;
 
     const previousSet = new Set(previousLabels);
@@ -1370,6 +1404,12 @@ function getAllBadgesFlat(data) {
   return badges;
 }
 
+// ==========================================================
+// PAGINA LEADERBOARD — ora legge direttamente le righe già calcolate
+// nello sheet (nessuna nuova chiamata a OpenSea per ogni wallet: molto
+// più veloce e scalabile con tanti utenti registrati).
+// ==========================================================
+
 function showLeaderboardPage() {
   mainView.style.display = "none";
   document.querySelectorAll(".trait-page").forEach((p) => p.classList.remove("active"));
@@ -1388,30 +1428,26 @@ const LEADERBOARD_METRICS = [
 let leaderboardEntries = [];
 
 async function loadLeaderboardData() {
-  const progressEl = () => document.getElementById("leaderboardProgress");
-  leaderboardPage.innerHTML = `<span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span><div class="section-title">Leaderboard <div class="bar"></div></div><div class="mono" id="leaderboardProgress">Loading registered wallets...</div>`;
+  leaderboardPage.innerHTML = `<span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span><div class="section-title">Leaderboard <div class="bar"></div></div><div class="mono">Loading leaderboard...</div>`;
 
-  const addresses = await getRegisteredLeaderboardAddresses();
-  if (addresses.length === 0) {
-    leaderboardPage.innerHTML = `<span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span><div class="section-title">Leaderboard <div class="bar"></div></div><div class="mono">No wallets registered yet — the leaderboard fills up as people connect to the album (or storage isn't available in this environment).</div>`;
+  if (!LEADERBOARD_API_URL) {
+    leaderboardPage.innerHTML = `<span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span><div class="section-title">Leaderboard <div class="bar"></div></div><div class="mono">Leaderboard not configured yet — set LEADERBOARD_API_URL to your Google Apps Script Web App URL (see apps-script.gs).</div>`;
     leaderboardEntries = [];
     return;
   }
 
-  const results = [];
-  for (let i = 0; i < addresses.length; i++) {
-    const address = addresses[i];
-    if (progressEl()) progressEl().textContent = `Checking wallet ${i + 1}/${addresses.length}: ${shortAddress(address)}...`;
-    const byGroup = {};
-    await loadGroupsWithConcurrency(ALBUM_GROUPS, 3, async (group) => { byGroup[group.key] = await fetchOwnedNFTs(address, group.chain, group.slug); });
-    const data = buildBadgeData(byGroup, lastTraitsMeta);
-    results.push({
-      address, totalItems: data.totalOwnedItems, collectionsOwned: data.groupsOwned.size,
-      collectionsCompleted: ALBUM_GROUPS.filter((g) => isGroupCompleted(data, g)).length,
-      albumPct: albumCompletionPct(data), totalBadges: countAllBadgesEarned(data),
-    });
+  const entries = await fetchLeaderboardEntries();
+  if (entries === null) {
+    leaderboardPage.innerHTML = `<span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span><div class="section-title">Leaderboard <div class="bar"></div></div><div class="mono">Couldn't load the leaderboard right now — please try again later.</div>`;
+    leaderboardEntries = [];
+    return;
   }
-  leaderboardEntries = results;
+
+  leaderboardEntries = entries;
+  if (leaderboardEntries.length === 0) {
+    leaderboardPage.innerHTML = `<span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span><div class="section-title">Leaderboard <div class="bar"></div></div><div class="mono">No wallets registered yet — the leaderboard fills up as people connect to the album.</div>`;
+    return;
+  }
   renderLeaderboardPage("totalBadges");
 }
 
