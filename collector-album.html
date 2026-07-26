@@ -1,0 +1,2531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Metamusex/Dolly Collector Album</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Work+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
+<style>
+  /* ==========================================================
+     DESIGN TOKENS
+     Pop-art / comic-book palette, matched to MetaMuseX's own
+     visual identity (bold ink outlines, halftone dots, punchy
+     primaries) rather than a generic template look.
+  ========================================================== */
+  :root {
+    --ink: #1B1B1F;
+    --paper: #FFF8F0;
+    --panel: #F1ECE2;
+    --pink: #FF3D7F;
+    --blue: #2E6DF2;
+    --yellow: #FFC93C;
+    --grey: #B9B2A4;
+    --radius: 14px;
+    --shadow-hard: 4px 4px 0 var(--ink);
+    --shadow-hard-sm: 2px 2px 0 var(--ink);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Work Sans', sans-serif;
+    background-image: radial-gradient(var(--grey) 1px, transparent 1px);
+    background-size: 18px 18px;
+    background-attachment: fixed;
+  }
+
+  .display {
+    font-family: 'Bangers', cursive;
+    letter-spacing: 0.03em;
+  }
+
+  .mono {
+    font-family: 'Space Mono', monospace;
+  }
+
+  a { color: inherit; }
+
+  /* ---------- Layout shells ---------- */
+  .wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 3px solid var(--ink);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-hard);
+  }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    text-align: center;
+    padding: 56px 24px 40px;
+    background: var(--paper);
+    border-bottom: 3px solid var(--ink);
+    background-image:
+      radial-gradient(rgba(27, 27, 31, 0.12) 1.4px, transparent 1.4px);
+    background-size: 16px 16px;
+    background-position: -8px -8px;
+  }
+
+  .eyebrow {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: var(--yellow);
+    border: 2px solid var(--ink);
+    padding: 4px 12px;
+    border-radius: 999px;
+    box-shadow: var(--shadow-hard-sm);
+    margin-bottom: 18px;
+  }
+
+  .hero h1 {
+    font-size: clamp(40px, 8vw, 76px);
+    line-height: 0.95;
+    margin: 0 0 10px;
+    color: var(--ink);
+    text-shadow: 3px 3px 0 var(--pink);
+  }
+
+  .hero p {
+    max-width: 520px;
+    margin: 0 auto 28px;
+    font-size: 17px;
+    line-height: 1.5;
+    color: #3a3a3f;
+  }
+
+  button {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    cursor: pointer;
+    border: 3px solid var(--ink);
+    border-radius: 999px;
+    padding: 14px 30px;
+    background: var(--pink);
+    color: var(--ink);
+    box-shadow: var(--shadow-hard);
+    transition: transform 0.08s ease;
+  }
+  button:hover { transform: translate(-1px, -1px); }
+  button:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
+  button:disabled { opacity: 0.55; cursor: default; box-shadow: var(--shadow-hard-sm); }
+
+  button.secondary {
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  .wallet-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 18px;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 6px 14px;
+    border-radius: 999px;
+  }
+  .wallet-chip .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #4ADE80;
+  }
+
+  /* ---------- Progress meter (signature element) ---------- */
+  .progress-section {
+    padding: 36px 24px;
+    text-align: center;
+  }
+
+  .progress-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 14px;
+  }
+
+  .ticket-strip {
+    display: flex;
+    gap: 5px;
+    max-width: 640px;
+    margin: 0 auto 14px;
+    padding: 10px;
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    border-radius: 999px;
+  }
+  .ticket {
+    flex: 1;
+    height: 22px;
+    background: repeating-linear-gradient(
+      90deg, var(--grey), var(--grey) 6px, transparent 6px, transparent 9px
+    );
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .ticket.filled {
+    background: var(--pink);
+  }
+
+  .progress-percent {
+    font-family: 'Bangers', cursive;
+    font-size: 42px;
+    display: inline-block;
+    background: var(--yellow);
+    border: 3px solid var(--ink);
+    border-radius: 50%;
+    width: 92px;
+    height: 92px;
+    line-height: 86px;
+    box-shadow: var(--shadow-hard);
+    transform: rotate(-6deg);
+  }
+
+  /* ---------- Album grid ---------- */
+  .section-title {
+    font-family: 'Bangers', cursive;
+    font-size: 30px;
+    letter-spacing: 0.02em;
+    margin: 40px 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title .bar { flex: 1; height: 3px; background: var(--ink); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-hard-sm);
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.08s ease;
+  }
+  .card:hover { transform: translate(-2px, -2px); box-shadow: var(--shadow-hard); }
+
+  .card.missing {
+    filter: grayscale(1);
+    opacity: 0.55;
+  }
+
+  .card .icon {
+    font-size: 34px;
+    margin-bottom: 8px;
+  }
+  .card .name {
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .card .count {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: #6b6b70;
+    margin-top: 4px;
+  }
+
+  /* the signature "COLLECTED" rubber stamp */
+  .stamp {
+    position: absolute;
+    top: 10px;
+    right: -26px;
+    background: transparent;
+    color: var(--pink);
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    border: 2px solid var(--pink);
+    padding: 3px 30px;
+    transform: rotate(18deg);
+    border-radius: 3px;
+    opacity: 0.9;
+  }
+
+  /* ---------- Trait sub-page ---------- */
+  .trait-page {
+    display: none;
+    margin-top: 16px;
+  }
+  .trait-page.active { display: block; }
+
+  /* ---------- Owned items grid (inside a collection's detail page) ---------- */
+  .owned-items-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .owned-item-card {
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    border-radius: 10px;
+    box-shadow: var(--shadow-hard-sm);
+    overflow: hidden;
+    text-align: center;
+  }
+  .owned-item-card .thumb {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    display: block;
+    background: var(--grey);
+  }
+  .owned-item-card .thumb-fallback {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    background: var(--grey);
+  }
+  .owned-item-card .item-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 6px;
+  }
+
+  .trait-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  .trait-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    color: inherit;
+  }
+  a.trait-chip.missing {
+    cursor: pointer;
+  }
+  a.trait-chip.missing:hover {
+    background: var(--yellow);
+  }
+  .trait-chip.missing {
+    color: var(--grey);
+    border-color: var(--grey);
+  }
+
+  /* ---------- Trait blocks (auto-detected traits + progress bar) ---------- */
+  .trait-block {
+    margin-bottom: 28px;
+  }
+  .trait-block-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .trait-block-title {
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .trait-block-pct {
+    font-size: 12px;
+    color: #6b6b70;
+    white-space: nowrap;
+  }
+  .trait-progress-bar {
+    height: 14px;
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .trait-progress-fill {
+    height: 100%;
+    background: var(--pink);
+    border-radius: 999px 0 0 999px;
+  }
+
+  .back-link {
+    display: inline-block;
+    margin-bottom: 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  /* ---------- Badges ---------- */
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 22px;
+    justify-content: center;
+    padding: 10px 0 30px;
+  }
+  .badge {
+    width: 96px;
+    text-align: center;
+  }
+  .badge .medal {
+    width: 76px;
+    height: 76px;
+    margin: 0 auto 8px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    background: var(--blue);
+    border: 3px solid var(--ink);
+    box-shadow: var(--shadow-hard-sm);
+  }
+  .badge.locked .medal {
+    background: var(--panel);
+    filter: grayscale(1);
+    opacity: 0.5;
+  }
+  .badge .label {
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* ---------- Stats / Leaderboard nav ---------- */
+  .page-nav-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin: 20px 0 4px;
+  }
+  .page-nav-buttons button {
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+
+  /* ---------- Stats page ---------- */
+  .stat-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .stat-card {
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-hard-sm);
+    padding: 16px 10px;
+    text-align: center;
+  }
+  .stat-value {
+    font-size: 34px;
+    line-height: 1;
+    color: var(--pink);
+  }
+  .stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 6px;
+    color: #6b6b70;
+  }
+  .stat-collection-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .stat-collection-row {
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-hard-sm);
+    padding: 14px 16px;
+  }
+  .stat-collection-head {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .stat-collection-sub {
+    font-size: 12px;
+    color: #6b6b70;
+  }
+
+  /* ---------- Leaderboard page ---------- */
+  .leaderboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .leaderboard-table th, .leaderboard-table td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 2px solid var(--panel);
+    font-size: 14px;
+  }
+  .leaderboard-table th {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b6b70;
+  }
+  .leaderboard-table tr:last-child td { border-bottom: none; }
+  .leaderboard-row-you { background: var(--yellow); }
+
+  /* ---------- Badge Guide page ---------- */
+  .guide-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .guide-card {
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-hard-sm);
+    padding: 14px 18px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .guide-card .guide-icon {
+    font-size: 28px;
+    line-height: 1;
+  }
+  .guide-card .guide-name {
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .guide-card .guide-desc {
+    font-size: 13px;
+    color: #55555a;
+    line-height: 1.4;
+  }
+
+  /* ---------- Airdrop page ---------- */
+  .airdrop-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .airdrop-item-card {
+    display: block;
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    border-radius: 10px;
+    box-shadow: var(--shadow-hard-sm);
+    overflow: hidden;
+    text-align: center;
+    position: relative;
+    text-decoration: none;
+    color: inherit;
+  }
+  a.airdrop-item-card.locked {
+    cursor: pointer;
+  }
+  a.airdrop-item-card.locked:hover {
+    box-shadow: var(--shadow-hard);
+    transform: translate(-1px, -1px);
+  }
+  .airdrop-item-card .thumb,
+  .airdrop-item-card .thumb-fallback {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    display: block;
+    background: var(--grey);
+  }
+  .airdrop-item-card .thumb-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+  }
+  .airdrop-item-card .item-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 6px;
+  }
+  .airdrop-item-card.locked .thumb,
+  .airdrop-item-card.locked .thumb-fallback {
+    filter: grayscale(1);
+    opacity: 0.35;
+  }
+  .airdrop-item-card.locked .item-name {
+    color: var(--grey);
+  }
+  .airdrop-lock-overlay {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--ink);
+    color: var(--paper);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+  }
+
+  /* ---------- Empty / disconnected state ---------- */
+  .empty-state {
+    text-align: center;
+    padding: 60px 24px;
+    color: #6b6b70;
+  }
+
+  footer {
+    text-align: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: #8b8b90;
+    padding: 30px 0 10px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero panel" style="border-radius: var(--radius) var(--radius) 0 0;">
+  <span class="eyebrow">Collector Edition</span>
+  <h1 class="display">METAMUSEX/DOLLY<br/>COLLECTOR ALBUM</h1>
+  <p>Connect your wallet to see which MetaMuseX families you've already collected — and which ones you still need to complete the album.</p>
+  <button id="connectBtn">Connect Wallet</button>
+  <div id="walletChip"></div>
+</div>
+
+<div class="wrap">
+
+  <div id="emptyState" class="empty-state">
+    No wallet connected. Click <strong>Connect Wallet</strong> to see your album.
+  </div>
+
+  <div id="albumContent" style="display:none;">
+
+    <div class="page-nav-buttons" id="pageNavButtons">
+      <button type="button" id="statsBtn" class="secondary">📊 My Stats</button>
+      <button type="button" id="airdropBtn" class="secondary">🎁 Airdrop</button>
+      <button type="button" id="badgeGuideBtn" class="secondary">📖 Badge Guide</button>
+      <button type="button" id="leaderboardBtn" class="secondary" style="display:none;">👑 Leaderboard</button>
+    </div>
+
+    <div class="progress-section panel" style="margin-top: 24px;">
+      <div class="progress-label mono">Collection Progress</div>
+      <div class="ticket-strip" id="ticketStrip"></div>
+      <div class="progress-percent mono" id="progressPercent">0%</div>
+    </div>
+
+    <div id="mainView">
+      <div class="section-title">MetaMuseX Album <div class="bar"></div></div>
+      <div class="grid" id="albumGrid"></div>
+
+      <div class="section-title">Badges <div class="bar"></div></div>
+      <div class="badge-row panel" id="badgeRow"></div>
+    </div>
+
+    <div id="traitViews"></div>
+  </div>
+
+  <div id="statsPage" class="trait-page"></div>
+  <div id="leaderboardPage" class="trait-page"></div>
+  <div id="badgeGuidePage" class="trait-page"></div>
+  <div id="airdropPage" class="trait-page"></div>
+
+</div>
+
+
+<footer>Metamusex/Dolly Collector Album &middot; Reads wallet holdings only, never requests a signature or transaction.</footer>
+
+<script>
+/* ==========================================================
+   CONFIG — questa è l'UNICA sezione che dovresti modificare.
+   Nessuna logica sotto questo blocco va toccata per aggiungere
+   o correggere collezioni/tratti/badge.
+========================================================== */
+
+// La tua OpenSea API key. Consiglio: creane una DEDICATA a questa
+// dapp (diversa da quella del bot Discord), così se qualcuno la
+// copia dal codice sorgente della pagina il danno resta limitato.
+// NOTA: essendo una pagina client-side, la chiave è visibile a
+// chiunque ispezioni il codice sorgente. Per la maggior parte dei
+// casi d'uso (dati pubblici di collezione) è un rischio accettato
+// da molte dapp, ma è bene saperlo.
+const OPENSEA_API_KEY = "ee7a76e2c6b3445bbdd49211f24d2978";
+
+// Il TUO indirizzo wallet: solo questo wallet, una volta connesso, vede il
+// bottone "Leaderboard" (che scansiona tutti i possessori delle collezioni,
+// operazione pesante — per questo è nascosta agli altri visitatori).
+// Lascia vuoto ("") per disattivare del tutto la leaderboard.
+const FOUNDER_ADDRESS = "0xD7ac51b7647110064Ff484b1e2961dF4Ad6c0D7b";
+
+// Le "famiglie" che compongono l'album. Ogni voce = una collezione
+// OpenSea. "chain" è "ethereum", "matic" (Polygon), "base", ecc.
+// "special: true" = collezione SENZA sistema di tratti (pezzi unici/1-1,
+// es. 1/1, 3D Special, Dolly 3D): usa un sistema badge diverso, basato
+// sul numero di pezzi posseduti invece che sui tratti.
+// "traitsUnavailable: true" disattiva del tutto il tracciamento dei tratti
+// per quella collezione (niente chiamata a /api/v2/traits/{slug}, niente
+// sezione Traits/Backgrounds/Rare Traits/badge legati ai tratti — solo un
+// messaggio nella sua pagina). Usato per "girls": dopo vari tentativi
+// (retry sui 429, normalizzazione nomi/valori) i suoi tratti restavano
+// inaffidabili — probabile limite/errore nei dati di OpenSea per questa
+// collezione specifica, non nel codice. Rimuovi il flag per riprovare se
+// in futuro OpenSea dovesse sistemare i dati di questa collezione.
+const ALBUM_GROUPS = [
+  { key: "girls",   label: "Girls",         icon: "👑", chain: "matic", slug: "metamusex-pfp", traitsUnavailable: true },
+  { key: "men",     label: "Men",           icon: "🤠", chain: "ethereum", slug: "metamusex-men-official" },
+  { key: "summer",  label: "Summer Vibes",  icon: "🌴", chain: "robinhood", slug: "metamusex-summer-vibes" },
+  { key: "onefone",  label: "1/1",         icon: "🎈", chain: "matic", slug: "metamusex-custom", special: true },
+  { key: "3d",      label: "3D Special",    icon: "✨", chain: "matic", slug: "metamusex-3d-special", special: true },
+  { key: "farm",    label: "Dolly's Farm",  icon: "🐄", chain: "matic",    slug: "dolly-s-farm-pol" },
+  { key: "crazy",    label: "Crazy Dolly",  icon: "🐄", chain: "base",    slug: "crazydolly-men" },
+  { key: "dolly3d",    label: "Dolly 3D",  icon: "🐄", chain: "base",    slug: "dolly3d", special: true }
+];
+
+// Pagine "trait" dedicate: per una data collezione, mostra una
+// checklist di valori di un certo trait_type (letto dai metadata
+// degli NFT posseduti). trait_type deve corrispondere ESATTAMENTE
+// a come appare nei metadata OpenSea della collezione.
+// NOTA: la sezione curata "Special Characters" per "men" (trait_type
+// "Character", con OOAK ecc.) è stata rimossa perché il trait_type non
+// corrispondeva ai metadata reali della collezione (l'OOAK posseduto non
+// veniva riconosciuto). Questi valori "speciali" ora compaiono
+// automaticamente nella sezione "Traits" generata da OpenSea, insieme a
+// tutti gli altri trait_type — nessuna configurazione manuale necessaria.
+// Vuoto per ora: l'unica voce che c'era ("Backgrounds" per girls) è stata
+// rimossa insieme all'attivazione di traitsUnavailable per quella
+// collezione (vedi ALBUM_GROUPS) — i suoi tratti non sono più tracciati
+// affatto, quindi una checklist curata non avrebbe più senso.
+const TRAIT_PAGES = [];
+
+// Badge off-chain: regole calcolate sui dati letti dal wallet.
+// `check(data)` riceve { groupsOwned: Set<string>, totalOwnedItems: number, byGroup: {key: items[]} }
+// e deve ritornare true/false.
+// Ogni badge può avere un campo opzionale `groupKey`:
+// - ASSENTE  → badge "generico": traguardo sul collezionismo nel suo insieme,
+//              compare nella pagina principale dell'album.
+// - PRESENTE → badge "di collezione": traguardo dentro UNA collezione
+//              specifica, compare solo dentro la pagina di quella collezione.
+// RARE_TRAIT_MAX_COUNT: soglia usata SOLO per il badge "Rare Find" — tenuta
+// molto stretta (pezzi posseduti da questo numero di NFT o meno nell'intera
+// collezione) così il badge resta un vero traguardo e non scatta troppo
+// facilmente. La tabella "Rare Traits Owned" NON usa questa soglia: mostra
+// sempre i pezzi più rari posseduti dal wallet in classifica, indipendente
+// dal fatto che siano abbastanza rari da sbloccare il badge (vedi
+// RARE_TABLE_MAX_ROWS più sotto).
+const RARE_TRAIT_MAX_COUNT = 1;
+
+// Quante righe mostrare nella tabella "Rare Traits Owned" di ogni
+// collezione: i top N pezzi posseduti più rari (in ordine di rarità
+// crescente), qualunque sia il loro conteggio — non un filtro per soglia.
+const RARE_TABLE_MAX_ROWS = 10;
+
+// Valori di tratto "sempre speciali" per una collezione, indipendentemente
+// dal loro conteggio reale su OpenSea: sbloccano comunque il badge "Rare
+// Find" e compaiono nella tabella "Rare Traits Owned" come pezzi speciali.
+// Servono per collezioni come "men", dove esistono personaggi 1/1 o varianti
+// speciali (Angel, Gold Angel, OOAK...) che vanno sempre considerati rari a
+// prescindere dal conteggio riportato dall'API tratti — il confronto è per
+// VALORE del tratto, non per trait_type (così funziona anche se il
+// trait_type esatto nei metadata differisce da quello che ti aspetti).
+// Il confronto ignora maiuscole/minuscole e spazi extra.
+// Aggiorna/correggi questi valori se non corrispondono esattamente ai tuoi.
+const SPECIAL_TRAIT_VALUES = {
+  men: ["1/1", "Angel", "Devil", "Gold Angel", "Black & White", "OOAK"],
+};
+
+// Soglie per il sistema badge delle collezioni SPECIALI (special: true,
+// es. 1/1, 3D Special, Dolly 3D) — qui non ci sono tratti, quindi i badge
+// si basano sul numero di pezzi posseduti in quella collezione.
+const SPECIAL_COMPLETIONIST_MIN = 5; // "Completionist" nelle collezioni speciali
+const SPECIAL_MASTER_MIN = 10;       // "Master" nelle collezioni speciali
+
+// Serie tematiche per le collezioni "special" a pezzi unici (per ora solo
+// "1/1" / key "onefone"): ogni pezzo della collezione appartiene a UNA
+// serie (es. "Screen Characters, Collectible", "Nature's Wonders"...), in
+// base all'elenco fornito. La chiave è il numero MMX del pezzo (es. "77"
+// per "MMX77 Smurfette") SENZA zeri iniziali. Generato dal documento
+// "Serie_Metamusex_1_1.docx" fornito — se un pezzo compariva in due serie
+// diverse nell'elenco originale, vince la prima assegnazione incontrata.
+// Il numero MMX di un NFT posseduto viene individuato così (vedi
+// getItemMmxNumber): 1) cercando "MMX" + cifre nel suo "name"; 2) se non
+// trovato, usando il token id (item.identifier) come numero MMX — questa
+// seconda modalità è un'ipotesi ragionevole (numerazione minting = numero
+// MMX) ma NON verificata: se i badge serie sembrano sbagliati una volta
+// collegato un wallet reale, è il primo punto da correggere.
+const SPECIAL_SERIES = {
+  onefone: {
+    "1": "Customization on request and collabs",
+    "2": "Customization on request and collabs",
+    "3": "Customization on request and collabs",
+    "4": "Nature's Wonders",
+    "5": "Event Gems - NFTs for Special Days",
+    "6": "Pursuits Palette",
+    "7": "Event Gems - NFTs for Special Days",
+    "8": "Once Upon a Time... Today",
+    "9": "Screen Characters, Collectible",
+    "10": "Ink and Speech Bubbles",
+    "11": "Once Upon a Time... Today",
+    "12": "Once Upon a Time... Today",
+    "13": "Nature's Wonders",
+    "14": "Pursuits Palette",
+    "15": "Once Upon a Time... Today",
+    "16": "Celestial Mysteries",
+    "17": "Once Upon a Time... Today",
+    "18": "Eternal Nightmares",
+    "20": "Customization on request and collabs",
+    "21": "Ink and Speech Bubbles",
+    "22": "Once Upon a Time... Today",
+    "23": "Once Upon a Time... Today",
+    "24": "Once Upon a Time... Today",
+    "25": "Customization on request and collabs",
+    "26": "Nature's Wonders",
+    "27": "Nature's Wonders",
+    "28": "Nature's Wonders",
+    "29": "Customization on request and collabs",
+    "30": "Celestial Mysteries",
+    "32": "Mythic Echoes",
+    "33": "Customization on request and collabs",
+    "34": "Once Upon a Time... Today",
+    "35": "Customization on request and collabs",
+    "36": "Pursuits Palette",
+    "37": "Zodiac Rebels",
+    "38": "Customization on request and collabs",
+    "39": "Screen Characters, Collectible",
+    "40": "Screen Characters, Collectible",
+    "41": "Once Upon a Time... Today",
+    "42": "Customization on request and collabs",
+    "43": "Customization on request and collabs",
+    "44": "Pursuits Palette",
+    "45": "Once Upon a Time... Today",
+    "47": "Pursuits Palette",
+    "48": "Event Gems - NFTs for Special Days",
+    "49": "Event Gems - NFTs for Special Days",
+    "50": "Customization on request and collabs",
+    "51": "Once Upon a Time... Today",
+    "52": "Customization on request and collabs",
+    "53": "Customization on request and collabs",
+    "54": "Event Gems - NFTs for Special Days",
+    "55": "Once Upon a Time... Today",
+    "56": "Screen Characters, Collectible",
+    "57": "Nature's Wonders",
+    "58": "Mythic Echoes",
+    "59": "Customization on request and collabs",
+    "60": "Customization on request and collabs",
+    "61": "Portraits of the Soul",
+    "62": "Mythic Echoes",
+    "63": "Customization on request and collabs",
+    "64": "Simply MetaMuseX",
+    "65": "Screen Characters, Collectible",
+    "66": "Folklore Fables",
+    "67": "Mythic Echoes",
+    "68": "Portraits of the Soul",
+    "69": "Ink and Speech Bubbles",
+    "70": "Customization on request and collabs",
+    "71": "Ink and Speech Bubbles",
+    "72": "Screen Characters, Collectible",
+    "73": "Portraits of the Soul",
+    "74": "Game World Chronicles",
+    "75": "Screen Characters, Collectible",
+    "76": "Pink Legends",
+    "77": "Screen Characters, Collectible",
+    "78": "Game World Chronicles",
+    "79": "Ink and Speech Bubbles",
+    "80": "Event Gems - NFTs for Special Days",
+    "81": "Ink and Speech Bubbles",
+    "82": "Customization on request and collabs",
+    "83": "Ink and Speech Bubbles",
+    "84": "Portraits of the Soul",
+    "85": "Portraits of the Soul",
+    "86": "Portraits of the Soul",
+    "87": "Customization on request and collabs",
+    "88": "Ink and Speech Bubbles",
+    "89": "Customization on request and collabs",
+    "90": "Customization on request and collabs",
+    "91": "Customization on request and collabs",
+    "92": "Customization on request and collabs",
+    "93": "Customization on request and collabs",
+    "94": "Customization on request and collabs",
+    "95": "Once Upon a Time... Today",
+    "97": "Ink and Speech Bubbles",
+    "98": "Ink and Speech Bubbles",
+    "99": "Ink and Speech Bubbles",
+    "100": "Ink and Speech Bubbles",
+    "101": "Ink and Speech Bubbles",
+    "102": "Ink and Speech Bubbles",
+    "103": "Ink and Speech Bubbles",
+    "104": "Screen Characters, Collectible",
+    "105": "Screen Characters, Collectible",
+    "106": "Portraits of the Soul",
+    "107": "Screen Characters, Collectible",
+    "108": "Screen Characters, Collectible",
+    "109": "Portraits of the Soul",
+    "110": "Customization on request and collabs",
+    "111": "Customization on request and collabs",
+    "112": "Screen Characters, Collectible",
+    "113": "Celestial Mysteries",
+    "114": "Screen Characters, Collectible",
+    "115": "Delicious",
+    "116": "Screen Characters, Collectible",
+    "117": "Screen Characters, Collectible",
+    "118": "Nature's Wonders",
+    "119": "Screen Characters, Collectible",
+    "120": "Pursuits Palette",
+    "121": "Ink and Speech Bubbles",
+    "122": "Ink and Speech Bubbles",
+    "123": "Event Gems - NFTs for Special Days",
+    "124": "Screen Characters, Collectible",
+    "125": "Screen Characters, Collectible",
+    "126": "Ink and Speech Bubbles",
+    "127": "Screen Characters, Collectible",
+    "131": "Screen Characters, Collectible",
+    "135": "Pursuits Palette",
+  },
+};
+
+// Le tre soglie/livelli dei badge serie (vedi SPECIAL_SERIES sopra): un
+// livello viene generato per una serie SOLO se quella serie ha abbastanza
+// pezzi totali da poterlo raggiungere (es. una serie da 3 pezzi totali non
+// genera mai il livello "6+", altrimenti sarebbe un badge impossibile).
+const SPECIAL_SERIES_TIERS = [
+  { min: 3, icon: "🥉", suffix: "Collector" },
+  { min: 5, icon: "🥈", suffix: "Enthusiast" },
+  { min: 6, icon: "🥇", suffix: "Master" },
+];
+
+// Collezioni usate dalla pagina Airdrop: NON fanno parte dell'album vero e
+// proprio (non serve che siano in ALBUM_GROUPS), servono solo per mostrare
+// all'utente quali NFT airdrop possiede/gli mancano. Ogni sezione può
+// raggruppare più slug (es. più drop della stessa serie).
+// IMPORTANTE: ogni voce ha bisogno della "chain" corretta (stessa sintassi
+// di ALBUM_GROUPS: "ethereum", "matic", "base", ecc.) per poter verificare
+// cosa possiede davvero il wallet connesso — trovi la chain sulla pagina
+// OpenSea della collezione (badge accanto al nome) o nell'URL
+// opensea.io/assets/<chain>/<contract>/<id> di un suo NFT.
+// Se lasci chain: "" il codice prova comunque tutte le chain già usate in
+// ALBUM_GROUPS (più lento e non garantito se la collezione è su una chain
+// diversa da quelle) — meglio impostarla esplicitamente qui appena la sai.
+const AIRDROP_SECTIONS = [
+  {
+    key: "metamusex",
+    label: "MetaMuseX",
+    icon: "🎭",
+    items: [
+      { slug: "metamusex-exclusive-vol-2", chain: "matic" },
+      { slug: "exclusive-metamusex", chain: "matic" },
+    ],
+  },
+  {
+    key: "dolly",
+    label: "Dolly",
+    icon: "🐄",
+    items: [
+      { slug: "dolly-exclusive", chain: "matic" },
+    ],
+  },
+];
+
+// Badge GENERALI: traguardi sul collezionismo nel suo insieme, visibili
+// nella pagina principale del profilo. I badge DI COLLEZIONE (Rare Find,
+// Completionist, Trait Master, Full Completion / Master) non sono qui:
+// vengono generati dinamicamente da getGroupBadges() più sotto, perché si
+// comportano diversamente per le collezioni "special" rispetto a quelle
+// normali (a tratti), e in parte dipendono da dati letti in tempo reale
+// da OpenSea (i trait_type esistenti).
+const BADGES = [
+  {
+    key: "early",
+    label: "Early Supporter",
+    icon: "🏅",
+    check: (data) => data.groupsOwned.size >= 2,
+  },
+  {
+    key: "topbuyer",
+    label: "Top Buyer",
+    icon: "🥈",
+    check: (data) => data.groupsOwned.size >= 3,
+  },
+  {
+    key: "og",
+    label: "OG Holder",
+    icon: "⭐",
+    check: (data) => data.groupsOwned.size >= 4,
+  },
+  {
+    key: "diamond",
+    label: "Diamond Collector",
+    icon: "💎",
+    check: (data) => data.groupsOwned.size === ALBUM_GROUPS.length,
+  },
+  {
+    key: "chain-hopper",
+    label: "Multi-Chain",
+    icon: "🌉",
+    check: (data) => countChainsOwned(data) >= 2,
+  },
+];
+
+/* ==========================================================
+   LOGICA — non serve modificare da qui in giù.
+========================================================== */
+
+let currentAddress = null;
+
+const connectBtn = document.getElementById("connectBtn");
+const walletChip = document.getElementById("walletChip");
+const emptyState = document.getElementById("emptyState");
+const albumContent = document.getElementById("albumContent");
+const albumGrid = document.getElementById("albumGrid");
+const traitViewsEl = document.getElementById("traitViews");
+const mainView = document.getElementById("mainView");
+const badgeRow = document.getElementById("badgeRow");
+const ticketStrip = document.getElementById("ticketStrip");
+const progressPercent = document.getElementById("progressPercent");
+const pageNavButtons = document.getElementById("pageNavButtons");
+const statsBtn = document.getElementById("statsBtn");
+const airdropBtn = document.getElementById("airdropBtn");
+const badgeGuideBtn = document.getElementById("badgeGuideBtn");
+const leaderboardBtn = document.getElementById("leaderboardBtn");
+const statsPage = document.getElementById("statsPage");
+const leaderboardPage = document.getElementById("leaderboardPage");
+const badgeGuidePage = document.getElementById("badgeGuidePage");
+const airdropPage = document.getElementById("airdropPage");
+
+// Ultimo giro di dati caricati per il wallet connesso — riusati quando si
+// apre la pagina Stats, senza dover rifare le chiamate a OpenSea.
+let lastTraitsMeta = null;
+let lastBadgeData = null;
+
+connectBtn.addEventListener("click", connectWallet);
+statsBtn.addEventListener("click", showStatsPage);
+airdropBtn.addEventListener("click", showAirdropPage);
+badgeGuideBtn.addEventListener("click", showBadgeGuidePage);
+leaderboardBtn.addEventListener("click", showLeaderboardPage);
+
+async function connectWallet() {
+  if (!window.ethereum) {
+    alert("No wallet found. Please install MetaMask (or another browser wallet) and try again.");
+    return;
+  }
+  try {
+    connectBtn.disabled = true;
+    connectBtn.textContent = "Connecting...";
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const accounts = await provider.send("eth_requestAccounts", []);
+    currentAddress = accounts[0];
+
+    walletChip.innerHTML = `<div class="wallet-chip"><span class="dot"></span>${shortAddress(currentAddress)}</div>`;
+    connectBtn.textContent = "Connected";
+
+    // Registra questo wallet come "utente dell'album" (vedi commento su
+    // registerLeaderboardUser) — così il leaderboard può classificare chi
+    // usa davvero l'app invece di tutti i possessori on-chain.
+    await registerLeaderboardUser(currentAddress);
+
+    await loadAlbum(currentAddress);
+  } catch (err) {
+    console.error(err);
+    alert("Wallet connection failed. Please try again.");
+    connectBtn.disabled = false;
+    connectBtn.textContent = "Connect Wallet";
+  }
+}
+
+function shortAddress(addr) {
+  return addr.slice(0, 6) + "..." + addr.slice(-4);
+}
+
+// Prefisso delle chiavi di storage condiviso usate per registrare "chi ha
+// usato l'album" — un elenco separato da qualunque dato on-chain, così il
+// leaderboard può classificare gli utenti REALI dell'app (chi si è
+// connesso almeno una volta) invece di TUTTI i possessori on-chain delle
+// collezioni.
+// IMPORTANTE: window.storage è l'API di storage persistente fornita
+// quando questa pagina gira come artifact di Claude — se la ospiti da
+// un'altra parte (un tuo sito, un tuo hosting), quell'API non esiste e
+// queste funzioni non fanno nulla (falliscono in silenzio: il resto
+// dell'album continua a funzionare normalmente, semplicemente nessun
+// wallet verrà mai registrato e il leaderboard resterà vuoto). Per farlo
+// funzionare fuori da Claude ti servirebbe un tuo backend/database che
+// tenga questa lista al posto di window.storage.
+const LEADERBOARD_STORAGE_PREFIX = "leaderboard-user:";
+
+async function registerLeaderboardUser(address) {
+  try {
+    if (!window.storage) return;
+    await window.storage.set(
+      `${LEADERBOARD_STORAGE_PREFIX}${address.toLowerCase()}`,
+      JSON.stringify({ lastSeen: Date.now() }),
+      true // condiviso: visibile a tutti i visitatori, non solo a questo wallet
+    );
+  } catch (err) {
+    console.warn("Could not register wallet for leaderboard (storage unavailable):", err);
+  }
+}
+
+async function getRegisteredLeaderboardAddresses() {
+  try {
+    if (!window.storage) return [];
+    const result = await window.storage.list(LEADERBOARD_STORAGE_PREFIX, true);
+    if (!result || !result.keys) return [];
+    return result.keys.map((k) => k.slice(LEADERBOARD_STORAGE_PREFIX.length));
+  } catch (err) {
+    console.warn("Could not read registered leaderboard users:", err);
+    return [];
+  }
+}
+
+// Chiamata a OpenSea con retry automatico sui 429 (rate limit) e sugli
+// errori di rete transitori, con backoff crescente (o rispettando l'header
+// Retry-After se OpenSea lo manda). Questa dapp fa molte chiamate quasi in
+// contemporanea all'avvio (più collezioni, ognuna con più endpoint): senza
+// retry, una singola chiamata "sfortunata" che finisce rate-limitata
+// restituisce semplicemente [] / null, e quella specifica collezione perde
+// dati (è la causa più probabile dietro una collezione a cui "mancano" i
+// tratti mentre le altre funzionano). Ritorna { ok, status, data }.
+async function fetchOpenSeaJson(url, retries = 3, baseDelayMs = 700) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { accept: "application/json", "x-api-key": OPENSEA_API_KEY },
+      });
+      if (res.status === 429 && attempt < retries) {
+        const retryAfter = Number(res.headers.get("retry-after"));
+        const delay = retryAfter > 0 ? retryAfter * 1000 : baseDelayMs * Math.pow(2, attempt);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+      if (!res.ok) return { ok: false, status: res.status, data: null };
+      const data = await res.json();
+      return { ok: true, status: res.status, data };
+    } catch (err) {
+      if (attempt === retries) return { ok: false, status: 0, data: null };
+      await new Promise((resolve) => setTimeout(resolve, baseDelayMs * Math.pow(2, attempt)));
+    }
+  }
+  return { ok: false, status: 0, data: null };
+}
+
+async function fetchOwnedNFTs(address, chain, slug) {
+  const url = `https://api.opensea.io/api/v2/chain/${chain}/account/${address}/nfts?collection=${slug}&limit=200`;
+  const { ok, status, data } = await fetchOpenSeaJson(url);
+  if (!ok) {
+    console.warn(`OpenSea API error for ${slug}:`, status);
+    return [];
+  }
+  return data.nfts || [];
+}
+
+// Ritorna TUTTI i trait_type/valori possibili di una collezione (con i
+// conteggi di quanti pezzi hanno ogni valore) — serve per sapere non solo
+// cosa possiedi, ma anche cosa TI MANCA, senza doverlo elencare a mano.
+async function fetchCollectionTraits(slug) {
+  const url = `https://api.opensea.io/api/v2/traits/${slug}`;
+  const { ok, status, data } = await fetchOpenSeaJson(url);
+  if (!ok) {
+    console.warn(`Traits API error for ${slug}:`, status);
+    return null;
+  }
+  return data; // { categories: {trait_type: dataType}, counts: {trait_type: {value: count}} }
+}
+
+// Carica un gruppo di collezioni con al massimo `limit` in corso
+// contemporaneamente, invece di sparare tutte le chiamate insieme — riduce
+// il rischio di far scattare il rate limit di OpenSea quando ci sono molte
+// collezioni nell'album.
+async function loadGroupsWithConcurrency(groups, limit, fn) {
+  let index = 0;
+  async function worker() {
+    while (index < groups.length) {
+      const current = index++;
+      await fn(groups[current]);
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, groups.length) }, worker);
+  await Promise.all(workers);
+}
+
+async function loadAlbum(address) {
+  emptyState.style.display = "none";
+  albumContent.style.display = "block";
+  albumGrid.innerHTML = `<div class="mono">Loading...</div>`;
+
+  const byGroup = {};
+  const traitsMeta = {}; // group.key -> risposta di /api/v2/traits/{slug} (o null se fallita)
+  // Al massimo 3 collezioni caricate in parallelo alla volta (invece che
+  // tutte e 8 insieme): riduce il rischio che OpenSea rate-limiti (429)
+  // qualche chiamata, che altrimenti perde silenziosamente i dati di quella
+  // collezione (tratti mancanti, percentuali assenti, ecc.).
+  await loadGroupsWithConcurrency(ALBUM_GROUPS, 3, async (group) => {
+    const [items, traitsData] = await Promise.all([
+      fetchOwnedNFTs(address, group.chain, group.slug),
+      group.traitsUnavailable ? Promise.resolve(null) : fetchCollectionTraits(group.slug),
+    ]);
+    byGroup[group.key] = items;
+    traitsMeta[group.key] = traitsData;
+  });
+
+  const badgeData = buildBadgeData(byGroup, traitsMeta);
+  lastTraitsMeta = traitsMeta;
+  lastBadgeData = badgeData;
+
+  renderAlbumGrid(byGroup);
+  renderGroupPages(byGroup, traitsMeta, badgeData);
+  renderProgress(byGroup);
+  renderBadges(badgeData);
+
+  const isFounder =
+    FOUNDER_ADDRESS && address.toLowerCase() === FOUNDER_ADDRESS.toLowerCase();
+  leaderboardBtn.style.display = isFounder ? "inline-block" : "none";
+}
+
+function renderAlbumGrid(byGroup) {
+  albumGrid.innerHTML = "";
+  ALBUM_GROUPS.forEach((group) => {
+    const items = byGroup[group.key] || [];
+    const owned = items.length > 0;
+
+    const card = document.createElement("div");
+    card.className = "card" + (owned ? "" : " missing");
+    card.innerHTML = `
+      ${owned ? `<div class="stamp">COLLECTED</div>` : ""}
+      <div class="icon">${group.icon}</div>
+      <div class="name">${group.label}</div>
+      <div class="count">${owned ? items.length + " owned" : "not owned"}</div>
+    `;
+    if (owned) {
+      card.addEventListener("click", () => showGroupPage(group.key));
+    }
+    albumGrid.appendChild(card);
+  });
+}
+
+// Prova a estrarre un'immagine "sensata" da un NFT OpenSea, qualunque
+// sia il campo che l'API ha popolato per quella collezione/chain.
+function getItemImage(item) {
+  return item.image_url || item.display_image_url || item.image || "";
+}
+
+function getItemName(item) {
+  return item.name || (item.identifier ? `#${item.identifier}` : "Untitled");
+}
+
+// Normalizza un valore di trait prima di usarlo come chiave di confronto —
+// solo trim degli spazi (non tocca maiuscole/minuscole, per non confondere
+// valori realmente distinti). Serve perché a volte il valore di un tratto
+// sui metadata del singolo NFT posseduto ha spazi in più/meno rispetto alla
+// chiave restituita da /api/v2/traits/{slug}: senza normalizzare, un pezzo
+// che possiedi davvero può risultare "mancante" per un semplice mismatch di
+// formattazione (è il tipo di bug dietro un OOAK che "non risulta" posseduto
+// pur essendo nella griglia degli NFT).
+function normTraitValue(v) {
+  return String(v).trim();
+}
+
+// Versione ANCORA più permissiva di normTraitValue, usata solo per i
+// confronti con SPECIAL_TRAIT_VALUES: ignora anche maiuscole/minuscole,
+// perché quei valori sono scritti a mano in configurazione e potrebbero non
+// combaciare esattamente col casing dei metadata reali.
+function normTraitValueLoose(v) {
+  return String(v).trim().toLowerCase();
+}
+
+// Stesso concetto di normTraitValue ma per il NOME del trait_type stesso
+// (es. "Background" vs "Background " con uno spazio in più verrebbero
+// trattati come due tratti diversi senza questa normalizzazione — è
+// probabilmente la causa di "un paio di tratti hanno lo stesso nome" nella
+// collezione girls: due chiavi quasi identiche nei metadata che finivano
+// per creare due blocchi/voci separate invece di unirsi in una sola).
+function normTraitType(tt) {
+  return String(tt).trim();
+}
+
+// Trasforma l'intero { trait_type: { valore: conteggio } } di una
+// collezione (così come arriva da /api/v2/traits/{slug}) in una versione
+// con CHIAVI trait_type normalizzate, sommando i valori quando due chiavi
+// diverse normalizzano allo stesso trait_type. Anche le categorie vengono
+// riportate alla chiave normalizzata. Va sempre usata al posto di
+// meta.counts/meta.categories grezzi quando si confronta "cosa possiedo"
+// con "cosa esiste", altrimenti due varianti quasi identiche dello stesso
+// trait_type (spazi, maiuscole) restano scollegate.
+function getNormalizedTraitsMeta(meta) {
+  if (!meta || !meta.counts) return null;
+  const counts = {};
+  Object.keys(meta.counts).forEach((tt) => {
+    const norm = normTraitType(tt);
+    if (!counts[norm]) counts[norm] = {};
+    const valueDict = meta.counts[tt] || {};
+    Object.keys(valueDict).forEach((v) => {
+      counts[norm][v] = (counts[norm][v] || 0) + (valueDict[v] || 0);
+    });
+  });
+  const categories = {};
+  const rawCategories = meta.categories || {};
+  Object.keys(rawCategories).forEach((tt) => {
+    const norm = normTraitType(tt);
+    if (!(norm in categories)) categories[norm] = rawCategories[tt];
+  });
+  return { counts, categories };
+}
+
+// Trasforma il dizionario {valore: conteggio} di un trait_type (così come
+// arriva da /api/v2/traits/{slug}) in una versione con chiavi normalizzate,
+// sommando i conteggi se due chiavi diverse normalizzano allo stesso valore
+// (es. "Beach" e "Beach " verrebbero unificate in una sola voce "Beach" con
+// il conteggio totale). Usata ovunque confrontiamo "cosa possiedo" con
+// "cosa esiste", per evitare i mismatch descritti sopra.
+function buildNormalizedCounts(countsForType) {
+  const map = {};
+  Object.keys(countsForType || {}).forEach((key) => {
+    const norm = normTraitValue(key);
+    if (!map[norm]) map[norm] = { display: norm, count: 0 };
+    map[norm].count += countsForType[key] || 0;
+  });
+  return map;
+}
+
+// Link diretto alla collezione su OpenSea filtrato per uno specifico
+// trait_type/valore — usato sui tratti mancanti per portare l'utente
+// dritto a comprare un pezzo con quel tratto. Se OpenSea avesse cambiato
+// lo schema dei parametri di ricerca, nel peggiore dei casi il filtro
+// viene ignorato e si apre comunque la pagina della collezione.
+function openSeaTraitBuyUrl(slug, traitType, value) {
+  const params = new URLSearchParams();
+  params.set("search[stringTraits][0][name]", traitType);
+  params.set("search[stringTraits][0][values][0]", value);
+  return `https://opensea.io/collection/${slug}?${params.toString()}`;
+}
+
+// Link diretto alla pagina di UN preciso NFT su OpenSea (usato sui pezzi
+// airdrop mancanti, per comprare esattamente quello che manca).
+function openSeaItemUrl(chain, contract, identifier) {
+  if (!chain || !contract || identifier == null) return null;
+  return `https://opensea.io/assets/${chain}/${contract}/${identifier}`;
+}
+
+// Rende un "trait-chip": link cliccabile verso OpenSea se il valore manca
+// (per comprarlo), semplice div se già posseduto.
+function traitChipHtml(slug, traitType, value, owned) {
+  const label = `${owned ? "✅" : "⬜"} ${value}`;
+  if (owned) return `<div class="trait-chip">${label}</div>`;
+  const url = openSeaTraitBuyUrl(slug, traitType, value);
+  return `<a class="trait-chip missing" href="${url}" target="_blank" rel="noopener noreferrer" title="Buy on OpenSea">${label}</a>`;
+}
+
+function renderGroupPages(byGroup, traitsMeta, badgeData) {
+  traitViewsEl.innerHTML = "";
+
+  ALBUM_GROUPS.forEach((group) => {
+    const items = byGroup[group.key] || [];
+    if (items.length === 0) return; // niente pagina per collezioni non possedute
+
+    // Griglia dei pezzi effettivamente posseduti
+    const itemsHtml = items
+      .map((item) => {
+        const img = getItemImage(item);
+        const thumb = img
+          ? `<img class="thumb" src="${img}" alt="${getItemName(item)}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'thumb-fallback',textContent:'${group.icon}'}))" />`
+          : `<div class="thumb-fallback">${group.icon}</div>`;
+        return `
+          <div class="owned-item-card">
+            ${thumb}
+            <div class="item-name">${getItemName(item)}</div>
+          </div>`;
+      })
+      .join("");
+
+    // Valori posseduti per ogni trait_type, calcolati dai metadata degli NFT
+    // del wallet — sia il NOME del tratto che il valore vengono normalizzati
+    // (trim), altrimenti due varianti quasi identiche dello stesso tratto
+    // (es. "Background" vs "Background ") restano separate invece di
+    // unirsi in un solo blocco. Saltato del tutto per le collezioni con
+    // traitsUnavailable: true (vedi ALBUM_GROUPS) — mostriamo solo una nota.
+    let curatedHtml = "";
+    let autoHtml = "";
+
+    if (group.traitsUnavailable) {
+      autoHtml = `
+        <div class="section-title" style="margin-top:32px;">Traits <div class="bar"></div></div>
+        <div class="mono" style="color:#6b6b70;">Trait data isn't reliably trackable for this collection right now — this section is intentionally disabled rather than showing incomplete or incorrect data.</div>
+      `;
+    } else {
+      const ownedByType = {};
+      items.forEach((item) => {
+        (item.traits || []).forEach((t) => {
+          const ttKey = normTraitType(t.trait_type);
+          if (!ownedByType[ttKey]) ownedByType[ttKey] = new Set();
+          ownedByType[ttKey].add(normTraitValue(t.value));
+        });
+      });
+
+      // Sezioni curate a mano (opzionali, definite in TRAIT_PAGES): utili per
+      // evidenziare un sottoinsieme scelto di valori (es. solo i "rari").
+      const curatedTypes = new Set();
+      curatedHtml = TRAIT_PAGES.filter((tp) => tp.groupKey === group.key)
+        .map((tp) => {
+          const ttKey = normTraitType(tp.trait_type);
+          curatedTypes.add(ttKey);
+          const owned = ownedByType[ttKey] || new Set();
+          const total = tp.values.length;
+          const ownedCount = tp.values.filter((v) => owned.has(normTraitValue(v))).length;
+          const pct = total > 0 ? Math.round((ownedCount / total) * 100) : 0;
+          const chips = tp.values
+            .map((v) => traitChipHtml(group.slug, tp.trait_type, v, owned.has(normTraitValue(v))))
+            .join("");
+          return `
+            <div class="trait-block">
+              <div class="trait-block-header">
+                <span class="trait-block-title">${tp.title}</span>
+                <span class="trait-block-pct mono">${ownedCount}/${total} &middot; ${pct}%</span>
+              </div>
+              <div class="trait-progress-bar"><div class="trait-progress-fill" style="width:${pct}%"></div></div>
+              <div class="trait-list">${chips}</div>
+            </div>
+          `;
+        })
+        .join("");
+
+      // Sezione automatica "Traits": UNIONE di (a) tutti i trait_type letti da
+      // /api/v2/traits/{slug} — con nomi/valori normalizzati, così due chiavi
+      // quasi identiche (spazi, maiuscole) si uniscono in un solo blocco
+      // invece di comparire come due tratti separati — e (b) qualunque
+      // trait_type presente sui TUOI NFT ma assente/filtrato da quella
+      // risposta (es. se l'endpoint fallisce del tutto, o restituisce dati
+      // parziali per quella collezione). Prima le due fonti si escludevano a
+      // vicenda: se l'endpoint traits falliva, spariva TUTTA la sezione; se
+      // rispondeva ma con dati incompleti per un certo tratto, quel tratto
+      // spariva comunque. Ora ogni trait_type che possiedi è garantito che
+      // compaia, con la percentuale di completamento se disponibile o come
+      // semplice elenco di ciò che possiedi se no.
+      const normMeta = getNormalizedTraitsMeta(traitsMeta && traitsMeta[group.key]);
+      const metaTraitTypes = normMeta
+        ? Object.keys(normMeta.counts).filter(
+            (tt) => !normMeta.categories[tt] || normMeta.categories[tt] === "string"
+          )
+        : [];
+      const allTraitTypes = new Set([...metaTraitTypes, ...Object.keys(ownedByType)]);
+      curatedTypes.forEach((tt) => allTraitTypes.delete(tt));
+
+      let missingTraitsNote = false;
+      const traitBlocks = Array.from(allTraitTypes)
+        .sort()
+        .map((traitType) => {
+          const owned = ownedByType[traitType] || new Set();
+          const hasFullList = normMeta && normMeta.counts[traitType];
+
+          if (hasFullList) {
+            const normCounts = buildNormalizedCounts(normMeta.counts[traitType]);
+            const allValues = Object.keys(normCounts).sort();
+            const total = allValues.length;
+            const ownedCount = allValues.filter((v) => owned.has(v)).length;
+            const pct = total > 0 ? Math.round((ownedCount / total) * 100) : 0;
+            const chips = allValues
+              .map((v) => traitChipHtml(group.slug, traitType, v, owned.has(v)))
+              .join("");
+            return `
+              <div class="trait-block">
+                <div class="trait-block-header">
+                  <span class="trait-block-title">${traitType}</span>
+                  <span class="trait-block-pct mono">${ownedCount}/${total} &middot; ${pct}%</span>
+                </div>
+                <div class="trait-progress-bar"><div class="trait-progress-fill" style="width:${pct}%"></div></div>
+                <div class="trait-list">${chips}</div>
+              </div>
+            `;
+          }
+
+          // Nessun elenco completo disponibile per questo trait_type (l'API
+          // traits non l'ha restituito): mostriamo solo ciò che possiedi,
+          // senza percentuale di completamento (non conosciamo il totale).
+          missingTraitsNote = true;
+          const values = Array.from(owned).sort();
+          const chips = values.map((v) => `<div class="trait-chip">✅ ${v}</div>`).join("");
+          return `
+            <div class="trait-block">
+              <div class="trait-block-header">
+                <span class="trait-block-title">${traitType}</span>
+                <span class="trait-block-pct mono">${values.length} owned value${values.length === 1 ? "" : "s"}</span>
+              </div>
+              <div class="trait-list">${chips}</div>
+            </div>
+          `;
+        })
+        .join("");
+
+      if (traitBlocks) {
+        autoHtml = `
+          <div class="section-title" style="margin-top:32px;">Traits <div class="bar"></div></div>
+          ${missingTraitsNote ? `<div class="mono" style="color:#6b6b70; margin-bottom:16px;">Some trait types couldn't be matched against OpenSea's full list — showing only the values found on your own NFTs for those, without totals or missing values.</div>` : ""}
+          ${traitBlocks}
+        `;
+      }
+    }
+
+    const page = document.createElement("div");
+    page.className = "trait-page";
+    page.id = `group-${group.key}`;
+    page.innerHTML = `
+      <span class="back-link" data-back="${group.key}">&larr; Back to album</span>
+      <div class="section-title">${group.icon} ${group.label} — ${items.length} owned <div class="bar"></div></div>
+      <div class="owned-items-grid">${itemsHtml}</div>
+      ${curatedHtml}
+      ${autoHtml}
+      ${buildRareTraitsTableHtml(group, badgeData)}
+      ${buildGroupBadgesHtml(group, badgeData)}
+    `;
+    traitViewsEl.appendChild(page);
+  });
+
+  traitViewsEl.querySelectorAll("[data-back]").forEach((el) => {
+    el.addEventListener("click", hideTraitPages);
+  });
+}
+
+function showGroupPage(groupKey) {
+  const page = document.getElementById(`group-${groupKey}`);
+  if (!page) return;
+  mainView.style.display = "none";
+  document.querySelectorAll(".trait-page").forEach((p) => p.classList.remove("active"));
+  page.classList.add("active");
+}
+
+function hideTraitPages() {
+  mainView.style.display = "block";
+  document.querySelectorAll(".trait-page").forEach((p) => p.classList.remove("active"));
+}
+
+function renderProgress(byGroup) {
+  const total = ALBUM_GROUPS.length;
+  const owned = ALBUM_GROUPS.filter((g) => (byGroup[g.key] || []).length > 0).length;
+  const pct = Math.round((owned / total) * 100);
+
+  ticketStrip.innerHTML = "";
+  for (let i = 0; i < total; i++) {
+    const t = document.createElement("div");
+    t.className = "ticket" + (i < owned ? " filled" : "");
+    ticketStrip.appendChild(t);
+  }
+  progressPercent.textContent = pct + "%";
+}
+
+// ---- Helper per i badge (usabili nei check() sopra in CONFIG) ----
+
+// Quante blockchain diverse sono rappresentate tra le collezioni possedute.
+function countChainsOwned(data) {
+  const chains = new Set();
+  data.groupsOwned.forEach((key) => {
+    const g = ALBUM_GROUPS.find((x) => x.key === key);
+    if (g) chains.add(g.chain);
+  });
+  return chains.size;
+}
+
+// True se possiedi TUTTI i valori esistenti per un certo trait_type in una
+// certa collezione (richiede che /api/v2/traits/{slug} abbia risposto).
+function isTraitTypeComplete(data, groupKey, traitType) {
+  const normMeta = getNormalizedTraitsMeta(data.traitsMeta && data.traitsMeta[groupKey]);
+  if (!normMeta || !normMeta.counts[traitType]) return false;
+  const normCounts = buildNormalizedCounts(normMeta.counts[traitType]);
+  const allValues = Object.keys(normCounts);
+  if (allValues.length === 0) return false;
+  const owned = new Set();
+  (data.byGroup[groupKey] || []).forEach((item) => {
+    (item.traits || []).forEach((t) => {
+      if (normTraitType(t.trait_type) === traitType) owned.add(normTraitValue(t.value));
+    });
+  });
+  return allValues.every((v) => owned.has(v));
+}
+
+// True se possiedi il 100% di OGNI trait_type (categorico) di una collezione.
+function isCollectionFullyMaxed(data, groupKey) {
+  const normMeta = getNormalizedTraitsMeta(data.traitsMeta && data.traitsMeta[groupKey]);
+  if (!normMeta) return false;
+  const traitTypes = Object.keys(normMeta.counts).filter(
+    (tt) => !normMeta.categories[tt] || normMeta.categories[tt] === "string"
+  );
+  if (traitTypes.length === 0) return false;
+  return traitTypes.every((tt) => isTraitTypeComplete(data, groupKey, tt));
+}
+
+// True se il wallet possiede, in quella collezione, almeno un pezzo con un
+// VALORE di tratto presente in SPECIAL_TRAIT_VALUES per quel gruppo — a
+// prescindere dal trait_type esatto e dal conteggio reale su OpenSea (vedi
+// commento su SPECIAL_TRAIT_VALUES in CONFIG).
+function hasSpecialTraitValue(data, groupKey) {
+  const specialValues = (SPECIAL_TRAIT_VALUES[groupKey] || []).map(normTraitValueLoose);
+  if (specialValues.length === 0) return false;
+  return (data.byGroup[groupKey] || []).some((item) =>
+    (item.traits || []).some((t) => specialValues.includes(normTraitValueLoose(t.value)))
+  );
+}
+
+// Elenca i valori posseduti che matchano SPECIAL_TRAIT_VALUES per quella
+// collezione (per mostrarli nella tabella "Rare Traits Owned" come pezzi
+// speciali, con la relativa immagine/nome dell'NFT che li porta).
+function getSpecialTraitMatches(data, groupKey) {
+  const specialValues = (SPECIAL_TRAIT_VALUES[groupKey] || []).map(normTraitValueLoose);
+  if (specialValues.length === 0) return [];
+  const matches = [];
+  (data.byGroup[groupKey] || []).forEach((item) => {
+    (item.traits || []).forEach((t) => {
+      if (specialValues.includes(normTraitValueLoose(t.value))) {
+        matches.push({
+          traitType: normTraitType(t.trait_type),
+          value: normTraitValue(t.value),
+          itemName: getItemName(item),
+        });
+      }
+    });
+  });
+  return matches;
+}
+
+// Elenca TUTTI i valori "rari" esistenti in una collezione (trait_value con
+// conteggio <= maxCount, secondo OpenSea), con earned=true se il wallet
+// possiede un pezzo con quel valore. Un valore compare una volta sola anche
+// se più NFT del wallet lo condividono.
+function getRareTraitValuesOwned(data, groupKey, maxCount) {
+  const normMeta = getNormalizedTraitsMeta(data.traitsMeta && data.traitsMeta[groupKey]);
+  if (!normMeta) return [];
+
+  const ownedPairs = new Set(); // "traitType||value" posseduti dal wallet (nome e valore normalizzati)
+  (data.byGroup[groupKey] || []).forEach((item) => {
+    (item.traits || []).forEach((t) => {
+      ownedPairs.add(`${normTraitType(t.trait_type)}||${normTraitValue(t.value)}`);
+    });
+  });
+
+  const rare = [];
+  Object.keys(normMeta.counts).forEach((traitType) => {
+    const normCounts = buildNormalizedCounts(normMeta.counts[traitType]);
+    Object.keys(normCounts).forEach((value) => {
+      const c = normCounts[value].count;
+      if (typeof c === "number" && c <= maxCount) {
+        rare.push({
+          traitType,
+          value,
+          count: c,
+          earned: ownedPairs.has(`${traitType}||${value}`),
+        });
+      }
+    });
+  });
+  return rare;
+}
+
+// Ritorna, per un trait_type, il totale di pezzi della collezione che hanno
+// UN valore qualsiasi di quel tratto — usato per calcolare la percentuale
+// di rarità (count / total) nella tabella "Rare Traits Owned". Riceve un
+// oggetto traitsMeta GIÀ normalizzato (getNormalizedTraitsMeta), non quello
+// grezzo, così i conteggi includono eventuali chiavi duplicate unite.
+function getTraitTypeTotal(normMeta, traitType) {
+  if (!normMeta || !normMeta.counts[traitType]) return null;
+  return Object.values(normMeta.counts[traitType]).reduce((sum, c) => sum + (c || 0), 0);
+}
+
+// Elenca OGNI coppia trait_type/valore posseduta dal wallet in una
+// collezione, col conteggio di quanti NFT in tutta la collezione hanno
+// quel valore (letto da traitsMeta) — cioè quanto è raro. Un valore compare
+// una volta sola anche se più NFT del wallet lo condividono. Nessuna soglia
+// qui: serve solo a poter poi ordinare per rarità e prendere i primi N.
+function getOwnedTraitRarities(data, groupKey) {
+  const normMeta = getNormalizedTraitsMeta(data.traitsMeta && data.traitsMeta[groupKey]);
+  if (!normMeta) return [];
+
+  const tally = new Map(); // "traitType||value" -> { traitType, value, count, ownedCount }
+  (data.byGroup[groupKey] || []).forEach((item) => {
+    (item.traits || []).forEach((t) => {
+      const normType = normTraitType(t.trait_type);
+      const normValue = normTraitValue(t.value);
+      const pairKey = `${normType}||${normValue}`;
+      if (!tally.has(pairKey)) {
+        const countsForType = normMeta.counts[normType];
+        if (!countsForType) return;
+        const c = buildNormalizedCounts(countsForType)[normValue];
+        if (!c || typeof c.count !== "number") return;
+        tally.set(pairKey, { traitType: normType, value: normValue, count: c.count, ownedCount: 0 });
+      }
+      tally.get(pairKey).ownedCount++;
+    });
+  });
+  return Array.from(tally.values());
+}
+
+// Costruisce la tabella dei pezzi POSSEDUTI PIÙ RARI in una collezione, con
+// la percentuale di rarità di ciascuno, PIÙ gli eventuali pezzi "sempre
+// speciali" definiti in SPECIAL_TRAIT_VALUES (mostrati per primi, con
+// l'etichetta "Special" al posto della percentuale, dato che il loro status
+// di rarità non dipende dal conteggio OpenSea). Non è un filtro per soglia
+// sul resto della tabella: prende semplicemente i top RARE_TABLE_MAX_ROWS
+// pezzi del wallet con la rarità più bassa (meno esemplari esistenti) dopo
+// gli eventuali speciali, i più rari per primi.
+function buildRareTraitsTableHtml(group, data) {
+  if (group.special || group.traitsUnavailable) return ""; // niente tratti da mostrare
+
+  const normMeta = getNormalizedTraitsMeta(data.traitsMeta && data.traitsMeta[group.key]);
+  const specialMatches = getSpecialTraitMatches(data, group.key);
+  const specialPairs = new Set(specialMatches.map((m) => `${m.traitType}||${m.value}`));
+
+  const rarestByCount = getOwnedTraitRarities(data, group.key)
+    .filter((r) => !specialPairs.has(`${r.traitType}||${r.value}`)) // evita doppioni con gli special
+    .sort((a, b) => a.count - b.count)
+    .slice(0, Math.max(0, RARE_TABLE_MAX_ROWS - specialMatches.length));
+
+  if (specialMatches.length === 0 && rarestByCount.length === 0) return "";
+
+  const specialRows = specialMatches
+    .slice(0, RARE_TABLE_MAX_ROWS)
+    .map(
+      (m) => `
+        <tr>
+          <td>${m.traitType}</td>
+          <td>${m.value}</td>
+          <td class="mono">—</td>
+          <td class="mono">—</td>
+          <td class="mono">✨ Special</td>
+        </tr>`
+    )
+    .join("");
+
+  const normalRows = rarestByCount
+    .map((r) => {
+      const total = getTraitTypeTotal(normMeta, r.traitType);
+      const pct = total ? ((r.count / total) * 100).toFixed(1) + "%" : "—";
+      return `
+        <tr>
+          <td>${r.traitType}</td>
+          <td>${r.value}</td>
+          <td class="mono">${r.ownedCount}</td>
+          <td class="mono">${r.count}${total ? ` / ${total}` : ""}</td>
+          <td class="mono">${pct}</td>
+        </tr>`;
+    })
+    .join("");
+
+  return `
+    <div class="section-title" style="margin-top:32px;">Rare Traits Owned <div class="bar"></div></div>
+    <table class="leaderboard-table">
+      <thead>
+        <tr><th>Trait</th><th>Value</th><th>Owned</th><th>Holders</th><th>Rarity</th></tr>
+      </thead>
+      <tbody>${specialRows}${normalRows}</tbody>
+    </table>
+  `;
+}
+
+// Individua il "numero MMX" di un pezzo della collezione 1/1 (usato per
+// abbinarlo a una serie in SPECIAL_SERIES). Prova prima a leggerlo dal nome
+// dell'NFT (es. "MMX77 Smurfette" → 77); se non lo trova, usa il token id
+// (item.identifier) come numero MMX — vedi il commento su SPECIAL_SERIES
+// per i limiti di questa seconda modalità.
+function getItemMmxNumber(item) {
+  const name = item.name || "";
+  const match = name.match(/MMX\s*0*(\d+)/i);
+  if (match) return match[1];
+  if (item.identifier != null) return String(item.identifier);
+  return null;
+}
+
+// Conta quanti pezzi POSSIEDE il wallet in ogni serie di SPECIAL_SERIES per
+// una collezione (es. "onefone"), e quanti pezzi esistono TOTALI in quella
+// serie (per sapere se un livello di badge è raggiungibile). Ritorna
+// { seriesName: { owned, total } }.
+function getSeriesStats(data, groupKey) {
+  const seriesMap = SPECIAL_SERIES[groupKey];
+  if (!seriesMap) return {};
+
+  const totals = {};
+  Object.values(seriesMap).forEach((series) => {
+    totals[series] = (totals[series] || 0) + 1;
+  });
+
+  const ownedCounts = {};
+  const seenPerSeries = {}; // evita di contare due volte lo stesso pezzo (stesso mmx number)
+  (data.byGroup[groupKey] || []).forEach((item) => {
+    const mmx = getItemMmxNumber(item);
+    if (mmx == null) return;
+    const series = seriesMap[mmx];
+    if (!series) return;
+    if (!seenPerSeries[series]) seenPerSeries[series] = new Set();
+    if (seenPerSeries[series].has(mmx)) return;
+    seenPerSeries[series].add(mmx);
+    ownedCounts[series] = (ownedCounts[series] || 0) + 1;
+  });
+
+  const stats = {};
+  Object.keys(totals).forEach((series) => {
+    stats[series] = { owned: ownedCounts[series] || 0, total: totals[series] };
+  });
+  return stats;
+}
+
+// True se la collezione è "completata" al massimo livello per il suo tipo:
+// Full Completion (100% tratti) per le generative, Master (soglia pezzi)
+// per le speciali. Usato per la metrica "collezioni completate".
+function isGroupCompleted(data, group) {
+  if (group.special) {
+    return (data.byGroup[group.key] || []).length >= SPECIAL_MASTER_MIN;
+  }
+  return isCollectionFullyMaxed(data, group.key);
+}
+
+// Percentuale di completamento album: quante collezioni possiedi almeno in
+// parte, sul totale — la stessa metrica mostrata nella barra "Collection
+// Progress" della pagina principale.
+function albumCompletionPct(data) {
+  if (ALBUM_GROUPS.length === 0) return 0;
+  return Math.round((data.groupsOwned.size / ALBUM_GROUPS.length) * 100);
+}
+
+// Costruisce l'elenco COMPLETO dei badge di UNA collezione (con earned
+// true/false ognuno), ramificando in base al tipo di collezione:
+// - "special" (1/1, 3D Special, Dolly 3D...): Completionist / Master, basati
+//   sul numero di pezzi posseduti, PIÙ — solo se configurate in
+//   SPECIAL_SERIES per quella collezione — i badge a livelli per serie
+//   tematica completata (Collector/Enthusiast/Master, vedi
+//   SPECIAL_SERIES_TIERS). Niente Rare Find/Trait Master/Full Completion,
+//   dato che non hanno un sistema di tratti classico.
+// - normale (generativa): Completionist (50% tratti), Full Completion
+//   (100% tratti), Trait Master (100% di UN tratto) e un singolo badge
+//   Rare Find (il dettaglio dei pezzi rari sta nella tabella dedicata,
+//   non in un badge per ogni valore raro — altrimenti la fila di badge
+//   esplode in collezioni con molte varianti rare). Rare Find scatta anche
+//   se possiedi un valore elencato in SPECIAL_TRAIT_VALUES per quel gruppo,
+//   indipendentemente dal conteggio reale su OpenSea.
+function getGroupBadges(group, data) {
+  const items = data.byGroup[group.key] || [];
+
+  if (group.special) {
+    const badges = [
+      {
+        icon: "🏆",
+        label: "Completionist",
+        earned: items.length >= SPECIAL_COMPLETIONIST_MIN,
+      },
+      {
+        icon: "🥇",
+        label: "Master",
+        earned: items.length >= SPECIAL_MASTER_MIN,
+      },
+    ];
+
+    // Badge a livelli per serie tematica (solo se questa collezione ha una
+    // mappa SPECIAL_SERIES configurata, es. "onefone").
+    const seriesStats = getSeriesStats(data, group.key);
+    Object.keys(seriesStats)
+      .sort()
+      .forEach((seriesName) => {
+        const { owned, total } = seriesStats[seriesName];
+        SPECIAL_SERIES_TIERS.forEach((tier) => {
+          if (total < tier.min) return; // livello impossibile da raggiungere per questa serie: non mostrarlo
+          badges.push({
+            icon: tier.icon,
+            label: `${seriesName} — ${tier.suffix}`,
+            earned: owned >= tier.min,
+          });
+        });
+      });
+
+    return badges;
+  }
+
+  // Nessun badge per le collezioni con traitsUnavailable: sono tutti
+  // basati sui tratti, e mostrarli sempre "locked" implicherebbe un
+  // traguardo raggiungibile ma non raggiunto, quando in realtà non è
+  // proprio possibile verificarlo per questa collezione.
+  if (group.traitsUnavailable) return [];
+
+  const badges = [
+    {
+      icon: "🏆",
+      label: "Completionist",
+      earned: (groupTraitStats(data, group.key) || {}).pct >= 50,
+    },
+    {
+      icon: "🎉",
+      label: "Full Completion",
+      earned: isCollectionFullyMaxed(data, group.key),
+    },
+    {
+      icon: "🐋",
+      label: "Rare Find",
+      earned:
+        getRareTraitValuesOwned(data, group.key, RARE_TRAIT_MAX_COUNT).some((r) => r.earned) ||
+        hasSpecialTraitValue(data, group.key),
+    },
+  ];
+
+  // Trait Master: uno per OGNI trait_type (categorico) di questa collezione,
+  // generato al volo da traitsMeta — sbloccato quando possiedi tutti i
+  // valori esistenti di quel tratto.
+  const meta = data.traitsMeta && data.traitsMeta[group.key];
+  if (meta && meta.counts) {
+    const categories = meta.categories || {};
+    Object.keys(meta.counts)
+      .filter((tt) => !categories[tt] || categories[tt] === "string")
+      .sort()
+      .forEach((traitType) => {
+        badges.push({
+          icon: "🎖️",
+          label: `${traitType} Master`,
+          earned: isTraitTypeComplete(data, group.key, traitType),
+        });
+      });
+  }
+
+  return badges;
+}
+
+// Calcola una volta sola i dati che i check() dei badge usano, così sia i
+// badge generici (pagina principale) sia quelli di collezione (dentro ogni
+// pagina) leggono esattamente le stesse informazioni.
+function buildBadgeData(byGroup, traitsMeta) {
+  const groupsOwned = new Set(
+    ALBUM_GROUPS.filter((g) => (byGroup[g.key] || []).length > 0).map((g) => g.key)
+  );
+  const totalOwnedItems = Object.values(byGroup).reduce((sum, arr) => sum + arr.length, 0);
+  return { groupsOwned, totalOwnedItems, byGroup, traitsMeta };
+}
+
+function renderBadges(data) {
+  const genericBadges = BADGES.filter((b) => !b.groupKey);
+
+  badgeRow.innerHTML = "";
+  genericBadges.forEach((badge) => {
+    const earned = badge.check(data);
+    const el = document.createElement("div");
+    el.className = "badge" + (earned ? "" : " locked");
+    el.innerHTML = `
+      <div class="medal">${badge.icon}</div>
+      <div class="label">${badge.label}</div>
+    `;
+    badgeRow.appendChild(el);
+  });
+}
+
+// Costruisce l'HTML della fila di badge relativi a UNA sola collezione
+// (quelli con groupKey === group.key), da inserire in fondo alla sua pagina.
+function badgeHtml(icon, label, earned) {
+  return `
+    <div class="badge${earned ? "" : " locked"}">
+      <div class="medal">${icon}</div>
+      <div class="label">${label}</div>
+    </div>`;
+}
+
+function buildGroupBadgesHtml(group, data) {
+  const items = getGroupBadges(group, data).map((b) => badgeHtml(b.icon, b.label, b.earned));
+  if (items.length === 0) return "";
+
+  return `
+    <div class="section-title" style="margin-top:32px;">Badges <div class="bar"></div></div>
+    <div class="badge-row panel">${items.join("")}</div>
+  `;
+}
+
+/* ==========================================================
+   MY STATS — pagina di riepilogo per il wallet connesso.
+========================================================== */
+
+// Somma quanti valori possiede il wallet su TUTTI i trait_type (categorici)
+// di una collezione, rispetto al totale esistente — per una barra unica
+// di "completamento tratti" invece di una per ogni singolo trait_type.
+function groupTraitStats(data, groupKey) {
+  const normMeta = getNormalizedTraitsMeta(data.traitsMeta && data.traitsMeta[groupKey]);
+  if (!normMeta) return null;
+  const ownedByType = {};
+  (data.byGroup[groupKey] || []).forEach((item) => {
+    (item.traits || []).forEach((t) => {
+      const ttKey = normTraitType(t.trait_type);
+      if (!ownedByType[ttKey]) ownedByType[ttKey] = new Set();
+      ownedByType[ttKey].add(normTraitValue(t.value));
+    });
+  });
+
+  let totalValues = 0;
+  let ownedValues = 0;
+  Object.keys(normMeta.counts).forEach((tt) => {
+    if (normMeta.categories[tt] && normMeta.categories[tt] !== "string") return;
+    const allValues = Object.keys(buildNormalizedCounts(normMeta.counts[tt]));
+    totalValues += allValues.length;
+    const owned = ownedByType[tt] || new Set();
+    ownedValues += allValues.filter((v) => owned.has(v)).length;
+  });
+  if (totalValues === 0) return null;
+  return { ownedValues, totalValues, pct: Math.round((ownedValues / totalValues) * 100) };
+}
+
+// Quanti badge (statici + Trait Master dinamici) sono sbloccati per UNA
+// singola collezione, su quanti ne esistono in totale per quella collezione.
+function groupBadgeStats(data, group) {
+  const badges = getGroupBadges(group, data);
+  return { earned: badges.filter((b) => b.earned).length, total: badges.length };
+}
+
+// Il pezzo più raro posseduto in assoluto (il trait_value con il conteggio
+// più basso tra tutti gli NFT del wallet, in qualunque collezione).
+function getRarestOwnedPiece(data) {
+  let best = null;
+  Object.entries(data.byGroup).forEach(([groupKey, items]) => {
+    const normMeta = getNormalizedTraitsMeta(data.traitsMeta && data.traitsMeta[groupKey]);
+    if (!normMeta) return;
+    items.forEach((item) => {
+      (item.traits || []).forEach((t) => {
+        const normType = normTraitType(t.trait_type);
+        const countsForType = normMeta.counts[normType];
+        const c = countsForType && buildNormalizedCounts(countsForType)[normTraitValue(t.value)];
+        if (c && typeof c.count === "number" && (!best || c.count < best.count)) {
+          const group = ALBUM_GROUPS.find((g) => g.key === groupKey);
+          best = {
+            count: c.count,
+            traitType: normType,
+            value: normTraitValue(t.value),
+            groupLabel: group ? group.label : groupKey,
+            itemName: getItemName(item),
+          };
+        }
+      });
+    });
+  });
+  return best;
+}
+
+function buildStatsPageHtml(data) {
+  const genericBadges = BADGES.filter((b) => !b.groupKey).map((b) => ({
+    ...b,
+    earned: b.check(data),
+  }));
+  const genericEarnedCount = genericBadges.filter((b) => b.earned).length;
+  const rarest = getRarestOwnedPiece(data);
+
+  const collectionRows = ALBUM_GROUPS.filter((g) => data.groupsOwned.has(g.key))
+    .map((group) => {
+      const items = data.byGroup[group.key] || [];
+      const traitStats = groupTraitStats(data, group.key);
+      const badgeStats = groupBadgeStats(data, group);
+      const pct = traitStats ? traitStats.pct : 0;
+      return `
+        <div class="stat-collection-row">
+          <div class="stat-collection-head">
+            <span>${group.icon} ${group.label}</span>
+            <span class="mono">${items.length} owned</span>
+          </div>
+          <div class="trait-progress-bar"><div class="trait-progress-fill" style="width:${pct}%"></div></div>
+          <div class="stat-collection-sub mono">
+            ${traitStats ? `${traitStats.ownedValues}/${traitStats.totalValues} traits (${pct}%)` : "no trait data"}
+            &middot; ${badgeStats.earned}/${badgeStats.total} badges
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
+    <div class="section-title">My Stats <div class="bar"></div></div>
+
+    <div class="stat-cards">
+      <div class="stat-card">
+        <div class="stat-value display">${data.totalOwnedItems}</div>
+        <div class="stat-label mono">Items Owned</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value display">${data.groupsOwned.size}/${ALBUM_GROUPS.length}</div>
+        <div class="stat-label mono">Collections</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value display">${genericEarnedCount}/${genericBadges.length}</div>
+        <div class="stat-label mono">Global Badges</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value display">${countChainsOwned(data)}</div>
+        <div class="stat-label mono">Chains</div>
+      </div>
+    </div>
+
+    ${
+      rarest
+        ? `
+      <div class="section-title" style="margin-top:32px;">Rarest Piece Owned <div class="bar"></div></div>
+      <div class="panel" style="padding:16px 20px;">
+        <strong>${rarest.itemName}</strong> (${rarest.groupLabel}) — ${rarest.traitType}: ${rarest.value}
+        <span class="mono" style="color:#6b6b70;"> &middot; only ${rarest.count} in existence</span>
+      </div>
+    `
+        : ""
+    }
+
+    <div class="section-title" style="margin-top:32px;">Global Badges <div class="bar"></div></div>
+    <div class="badge-row panel">${genericBadges.map((b) => badgeHtml(b.icon, b.label, b.earned)).join("")}</div>
+
+    ${
+      collectionRows
+        ? `
+      <div class="section-title" style="margin-top:32px;">By Collection <div class="bar"></div></div>
+      <div class="stat-collection-list">${collectionRows}</div>
+    `
+        : ""
+    }
+  `;
+}
+
+function showStatsPage() {
+  statsPage.innerHTML = lastBadgeData
+    ? buildStatsPageHtml(lastBadgeData)
+    : `
+      <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
+      <div class="section-title">My Stats <div class="bar"></div></div>
+      <div class="mono">Connect your wallet to see your stats.</div>
+    `;
+  mainView.style.display = "none";
+  document.querySelectorAll(".trait-page").forEach((p) => p.classList.remove("active"));
+  statsPage.classList.add("active");
+}
+
+/* ==========================================================
+   LEADERBOARD — solo per FOUNDER_ADDRESS. Classifica solo i wallet che si
+   sono REGISTRATI usando l'album (bottone "Connect Wallet" — vedi
+   registerLeaderboardUser), non tutti i possessori on-chain delle
+   collezioni: per ognuno rilegge cosa possiede con lo stesso endpoint
+   per-account già usato per l'album principale.
+========================================================== */
+
+// Scarica TUTTI gli NFT di una collezione (non filtrati per wallet),
+// paginando finché OpenSea restituisce un cursore "next". `maxPages` è un
+// tetto di sicurezza per non restare bloccati su collezioni enormi o finire
+// i crediti dell'API key — alzalo se le tue collezioni sono molto grandi.
+// `maxItems`, se impostato, interrompe la paginazione appena raggiunto
+// quel numero di elementi (utile per non scaricare pagine inutili quando
+// serve solo un campione).
+async function fetchAllCollectionNFTs(slug, maxPages = 25, maxItems = Infinity) {
+  let all = [];
+  let next;
+  for (let page = 0; page < maxPages; page++) {
+    if (all.length >= maxItems) break;
+    const url = `https://api.opensea.io/api/v2/collection/${slug}/nfts?limit=200${
+      next ? `&next=${encodeURIComponent(next)}` : ""
+    }`;
+    const { ok, status, data } = await fetchOpenSeaJson(url);
+    if (!ok) {
+      console.warn(`Collection NFTs API error for ${slug}:`, status);
+      break;
+    }
+    all = all.concat(data.nfts || []);
+    next = data.next;
+    if (!next) break;
+  }
+  return maxItems === Infinity ? all : all.slice(0, maxItems);
+}
+
+// Quanti badge in totale (generici + di collezione + Trait Master dinamici)
+// un dato set di dati sblocca — usato per stilare la classifica.
+function countAllBadgesEarned(data) {
+  let count = BADGES.filter((b) => b.check(data)).length;
+  ALBUM_GROUPS.forEach((group) => {
+    count += getGroupBadges(group, data).filter((b) => b.earned).length;
+  });
+  return count;
+}
+
+function showLeaderboardPage() {
+  mainView.style.display = "none";
+  document.querySelectorAll(".trait-page").forEach((p) => p.classList.remove("active"));
+  leaderboardPage.classList.add("active");
+  loadLeaderboardData();
+}
+
+// Definizione delle colonne/metriche disponibili per ordinare la classifica.
+const LEADERBOARD_METRICS = [
+  { key: "totalBadges", label: "Badges Earned" },
+  { key: "totalItems", label: "Total NFTs Owned" },
+  { key: "collectionsCompleted", label: "Collections Completed" },
+  { key: "albumPct", label: "Album Completion %" },
+  { key: "collectionsOwned", label: "Collections Owned" },
+];
+
+let leaderboardEntries = []; // cache in memoria, per riordinare senza rifare i fetch
+
+async function loadLeaderboardData() {
+  const progressEl = () => document.getElementById("leaderboardProgress");
+
+  leaderboardPage.innerHTML = `
+    <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
+    <div class="section-title">Leaderboard <div class="bar"></div></div>
+    <div class="mono" id="leaderboardProgress">Loading registered wallets...</div>
+  `;
+
+  const addresses = await getRegisteredLeaderboardAddresses();
+
+  if (addresses.length === 0) {
+    leaderboardPage.innerHTML = `
+      <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
+      <div class="section-title">Leaderboard <div class="bar"></div></div>
+      <div class="mono">No wallets registered yet — the leaderboard fills up as people connect to the album (or storage isn't available in this environment; see code comment on registerLeaderboardUser).</div>
+    `;
+    leaderboardEntries = [];
+    return;
+  }
+
+  // Per ogni wallet REGISTRATO (chi si è connesso all'album almeno una
+  // volta — non tutti i possessori on-chain), leggiamo cosa possiede in
+  // ogni collezione con lo stesso endpoint per-account già usato per
+  // l'album principale: affidabile, ed evita del tutto lo scan NFT-per-NFT
+  // (lento e rate-limitato) usato in precedenza.
+  const results = [];
+  for (let i = 0; i < addresses.length; i++) {
+    const address = addresses[i];
+    if (progressEl()) {
+      progressEl().textContent = `Checking wallet ${i + 1}/${addresses.length}: ${shortAddress(address)}...`;
+    }
+    const byGroup = {};
+    await loadGroupsWithConcurrency(ALBUM_GROUPS, 3, async (group) => {
+      byGroup[group.key] = await fetchOwnedNFTs(address, group.chain, group.slug);
+    });
+    // I tratti sono dati di collezione (non dipendono dal wallet): riusiamo
+    // quelli già scaricati per il wallet correntemente connesso invece di
+    // richiederli di nuovo per ogni utente registrato.
+    const data = buildBadgeData(byGroup, lastTraitsMeta);
+    results.push({
+      address,
+      totalItems: data.totalOwnedItems,
+      collectionsOwned: data.groupsOwned.size,
+      collectionsCompleted: ALBUM_GROUPS.filter((g) => isGroupCompleted(data, g)).length,
+      albumPct: albumCompletionPct(data),
+      totalBadges: countAllBadgesEarned(data),
+    });
+  }
+
+  leaderboardEntries = results;
+
+  renderLeaderboardPage("totalBadges");
+}
+
+function renderLeaderboardPage(sortKey) {
+  const sorted = [...leaderboardEntries].sort(
+    (a, b) => b[sortKey] - a[sortKey] || b.totalBadges - a.totalBadges
+  );
+
+  const options = LEADERBOARD_METRICS.map(
+    (m) => `<option value="${m.key}" ${m.key === sortKey ? "selected" : ""}>${m.label}</option>`
+  ).join("");
+
+  const rows = sorted
+    .slice(0, 50)
+    .map((e, i) => {
+      const rankLabel = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
+      const isYou = currentAddress && e.address === currentAddress.toLowerCase();
+      return `
+        <tr class="${isYou ? "leaderboard-row-you" : ""}">
+          <td>${rankLabel}</td>
+          <td class="mono">${shortAddress(e.address)}${isYou ? " (you)" : ""}</td>
+          <td class="mono">${e.totalBadges}</td>
+          <td class="mono">${e.totalItems}</td>
+          <td class="mono">${e.collectionsOwned}/${ALBUM_GROUPS.length}</td>
+          <td class="mono">${e.collectionsCompleted}</td>
+          <td class="mono">${e.albumPct}%</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  leaderboardPage.innerHTML = `
+    <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
+    <div class="section-title">Leaderboard <div class="bar"></div></div>
+    <div class="mono" style="margin-bottom:14px; color:#6b6b70;">
+      ${leaderboardEntries.length} registered wallet${leaderboardEntries.length === 1 ? "" : "s"} (users who've connected to the album, not every on-chain holder).
+      Sorted by:
+      <select id="leaderboardSort" class="mono">${options}</select>
+    </div>
+    <table class="leaderboard-table">
+      <thead>
+        <tr>
+          <th></th><th>Wallet</th><th>Badges</th><th>NFTs</th>
+          <th>Collections</th><th>Completed</th><th>Album %</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+
+  document.getElementById("leaderboardSort").addEventListener("change", (e) => {
+    renderLeaderboardPage(e.target.value);
+  });
+}
+
+/* ==========================================================
+   BADGE GUIDE — pagina informativa statica: spiega tutti i
+   badge disponibili e come si ottengono. Non dipende dal
+   wallet connesso, è sempre la stessa per tutti.
+========================================================== */
+
+const GENERAL_BADGE_GUIDE = [
+  { icon: "🏅", name: "Early Supporter", desc: "Own NFTs from at least 2 MetaMuseX collections." },
+  { icon: "🥈", name: "Top Buyer", desc: "Own NFTs from at least 3 MetaMuseX collections." },
+  { icon: "⭐", name: "OG Holder", desc: "Own NFTs from at least 4 MetaMuseX collections." },
+  { icon: "💎", name: "Diamond Collector", desc: "Own NFTs from every MetaMuseX collection." },
+  { icon: "🌉", name: "Multi-Chain", desc: "Own NFTs across at least 2 different blockchains." },
+];
+
+const COLLECTION_BADGE_GUIDE = [
+  {
+    icon: "🐋",
+    name: "Rare Find",
+    desc: `Own at least one NFT with a truly rare trait value in that collection (owned by ${RARE_TRAIT_MAX_COUNT} piece${RARE_TRAIT_MAX_COUNT === 1 ? "" : "s"} across the whole collection), OR one of that collection's always-special values (see SPECIAL_TRAIT_VALUES in the code, e.g. Men's 1/1 and Angel/Gold Angel/OOAK variants). That collection's "Rare Traits Owned" table always lists your top ${RARE_TABLE_MAX_ROWS} rarest/special owned pieces, regardless of whether they're rare enough to unlock the badge. Not available on special collections (1/1, 3D Special, Dolly 3D).`,
+  },
+  {
+    icon: "🏆",
+    name: "Completionist",
+    desc: "Reach at least 50% completion across all traits of that collection.",
+  },
+  {
+    icon: "🎖️",
+    name: "Trait Master: <Trait>",
+    desc: 'Own every existing value of one specific trait in that collection, e.g. "Background Master". One badge per trait type.',
+  },
+  {
+    icon: "🎉",
+    name: "Full Completion",
+    desc: "Own 100% of every trait value that exists in that collection — total mastery.",
+  },
+  {
+    icon: "🥇",
+    name: "Master (special collections)",
+    desc: `Special collections without traits (1/1, 3D Special, Dolly 3D) use a different rule: own at least ${SPECIAL_COMPLETIONIST_MIN} pieces for Completionist, or at least ${SPECIAL_MASTER_MIN} pieces for Master.`,
+  },
+  {
+    icon: "🥉",
+    name: "<Series> — Collector / Enthusiast / Master",
+    desc: "For the 1/1 collection only: each piece belongs to one thematic series (Screen Characters, Nature's Wonders, etc). Own 3+ pieces of a series for Collector, 5+ for Enthusiast, 6+ for Master — only shown for series large enough to reach that level.",
+  },
+];
+
+function guideCardHtml(icon, name, desc) {
+  return `
+    <div class="guide-card">
+      <div class="guide-icon">${icon}</div>
+      <div>
+        <div class="guide-name">${name}</div>
+        <div class="guide-desc">${desc}</div>
+      </div>
+    </div>`;
+}
+
+function showBadgeGuidePage() {
+  badgeGuidePage.innerHTML = `
+    <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
+    <div class="section-title">Badge Guide <div class="bar"></div></div>
+
+    <div class="section-title" style="margin-top:0; font-size:20px;">General Badges <div class="bar"></div></div>
+    <div class="guide-list">${GENERAL_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div>
+
+    <div class="section-title" style="margin-top:32px; font-size:20px;">Collection Badges <div class="bar"></div></div>
+    <div class="guide-list">${COLLECTION_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div>
+  `;
+  mainView.style.display = "none";
+  document.querySelectorAll(".trait-page").forEach((p) => p.classList.remove("active"));
+  badgeGuidePage.classList.add("active");
+}
+
+/* ==========================================================
+   AIRDROP — mostra TUTTI gli NFT delle collezioni airdrop
+   (non solo quelli posseduti): quelli del wallet connesso
+   normali, gli altri "bloccati" (opachi + lucchetto).
+
+   NOTA sul fix: /api/v2/collection/{slug}/nfts (usato per elencare TUTTI
+   gli NFT della collezione) non restituisce dati di ownership affidabili
+   per queste collezioni, quindi il controllo "lo possiedo?" non può basarsi
+   sul campo owner/owners di quella risposta (risultava sempre "no", da cui il
+   lucchetto su ogni pezzo, anche quelli posseduti). Per sapere cosa possiede
+   DAVVERO il wallet connesso, interroghiamo invece l'endpoint per-account
+   (lo stesso usato per l'album principale), provando tutte le chain note
+   dell'album — dato che queste collezioni airdrop non hanno una "chain"
+   dichiarata in AIRDROP_SECTIONS.
+========================================================== */
+
+// Chain distinte già usate in ALBUM_GROUPS: usate SOLO come fallback per gli
+// slug airdrop a cui non è stata impostata una "chain" esplicita in
+// AIRDROP_SECTIONS — meno affidabile (funziona solo se la collezione è per
+// caso su una di queste chain) e più lento (una chiamata per ogni chain).
+// Va preferita sempre l'impostazione esplicita di `chain` in AIRDROP_SECTIONS.
+const KNOWN_CHAINS = [...new Set(ALBUM_GROUPS.map((g) => g.chain))];
+
+// Cache in memoria: `${address}|${slug}` -> Set di identifier posseduti dal
+// wallet in quella collezione.
+const ownedIdentifierCache = {};
+
+async function fetchOwnedIdentifiersForSlug(address, slug, chain) {
+  const cacheKey = `${address.toLowerCase()}|${slug}`;
+  if (ownedIdentifierCache[cacheKey]) return ownedIdentifierCache[cacheKey];
+
+  // Chain esplicita → una sola chiamata, affidabile. Chain non impostata →
+  // fallback: prova tutte le chain note (vedi commento su KNOWN_CHAINS).
+  const items = chain
+    ? await fetchOwnedNFTs(address, chain, slug)
+    : (await Promise.all(KNOWN_CHAINS.map((c) => fetchOwnedNFTs(address, c, slug)))).flat();
+
+  const owned = new Set();
+  items.forEach((item) => {
+    if (item.identifier != null) owned.add(String(item.identifier));
+  });
+  ownedIdentifierCache[cacheKey] = owned;
+  return owned;
+}
+
+// Cache in memoria: slug -> tutti gli NFT di quella collezione airdrop
+// (evita di riscaricare tutto ogni volta che si riapre la pagina).
+const airdropCache = {};
+
+async function getAirdropSectionItems(section) {
+  const results = await Promise.all(
+    section.items.map(async ({ slug }) => {
+      if (!airdropCache[slug]) {
+        airdropCache[slug] = await fetchAllCollectionNFTs(slug);
+      }
+      return airdropCache[slug];
+    })
+  );
+  return results.flat();
+}
+
+function showAirdropPage() {
+  mainView.style.display = "none";
+  document.querySelectorAll(".trait-page").forEach((p) => p.classList.remove("active"));
+  airdropPage.classList.add("active");
+  loadAirdropData();
+}
+
+async function loadAirdropData() {
+  airdropPage.innerHTML = `
+    <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
+    <div class="section-title">Airdrop <div class="bar"></div></div>
+    <div class="mono">Loading airdrop collections...</div>
+  `;
+
+  const myAddress = currentAddress ? currentAddress.toLowerCase() : null;
+  const sectionsHtml = [];
+
+  for (const section of AIRDROP_SECTIONS) {
+    const items = await getAirdropSectionItems(section);
+
+    // slug -> chain, per costruire il link d'acquisto del pezzo mancante
+    // (ogni item porta con sé lo slug in item.collection, ma non la chain).
+    const chainBySlug = {};
+    section.items.forEach(({ slug, chain }) => {
+      chainBySlug[slug] = chain;
+    });
+
+    // Insieme (per identifier) di ciò che il wallet possiede davvero in
+    // ognuno degli slug di questa sezione, letto dall'endpoint per-account.
+    let ownedIdentifiersBySlug = {};
+    if (myAddress) {
+      await Promise.all(
+        section.items.map(async ({ slug, chain }) => {
+          ownedIdentifiersBySlug[slug] = await fetchOwnedIdentifiersForSlug(myAddress, slug, chain);
+        })
+      );
+    }
+
+    const isItemOwned = (item) => {
+      if (!myAddress) return false;
+      // item.collection è lo slug della collezione (così come lo restituisce
+      // OpenSea sull'oggetto NFT stesso): lo usiamo per scegliere il set
+      // giusto quando la sezione raggruppa più slug diversi.
+      const owned = ownedIdentifiersBySlug[item.collection];
+      if (owned) return owned.has(String(item.identifier));
+      // Fallback, nel raro caso in cui item.collection non corrisponda a
+      // nessuno slug della sezione: controlla in tutti gli insiemi posseduti.
+      return Object.values(ownedIdentifiersBySlug).some((set) => set.has(String(item.identifier)));
+    };
+
+    const owned = items.filter(isItemOwned);
+
+    const cardsHtml = items
+      .map((item) => {
+        const itemOwned = isItemOwned(item);
+        const img = getItemImage(item);
+        const thumb = img
+          ? `<img class="thumb" src="${img}" alt="${getItemName(item)}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'thumb-fallback',textContent:'${section.icon}'}))" />`
+          : `<div class="thumb-fallback">${section.icon}</div>`;
+        const inner = `
+            ${itemOwned ? "" : `<div class="airdrop-lock-overlay">🔒</div>`}
+            ${thumb}
+            <div class="item-name">${getItemName(item)}</div>`;
+        if (itemOwned) {
+          return `<div class="airdrop-item-card">${inner}</div>`;
+        }
+        // Non posseduto: la card diventa un link diretto a quel preciso
+        // NFT su OpenSea, per comprare esattamente il pezzo mancante.
+        const chain = chainBySlug[item.collection] || Object.values(chainBySlug)[0];
+        const buyUrl = openSeaItemUrl(chain, item.contract, item.identifier);
+        return buyUrl
+          ? `<a class="airdrop-item-card locked" href="${buyUrl}" target="_blank" rel="noopener noreferrer" title="Buy on OpenSea">${inner}</a>`
+          : `<div class="airdrop-item-card locked">${inner}</div>`;
+      })
+      .join("");
+
+    sectionsHtml.push(`
+      <div class="section-title" style="margin-top:32px;">
+        ${section.icon} ${section.label} <div class="bar"></div>
+      </div>
+      <div class="mono" style="margin-bottom:12px; color:#6b6b70;">
+        ${owned.length}/${items.length} owned
+      </div>
+      <div class="airdrop-grid">${cardsHtml || `<div class="mono">No NFTs found for this section.</div>`}</div>
+    `);
+  }
+
+  airdropPage.innerHTML = `
+    <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
+    <div class="section-title">Airdrop <div class="bar"></div></div>
+    ${
+      myAddress
+        ? ""
+        : `<div class="mono">Connect your wallet to see which airdrop pieces you already own.</div>`
+    }
+    ${sectionsHtml.join("")}
+  `;
+}
+</script>
+</body>
+</html>
