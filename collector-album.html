@@ -265,9 +265,10 @@
     </div>
 
     <div class="progress-section panel" style="margin-top: 24px;">
-      <div class="progress-label mono">Collection Progress</div>
+      <div class="progress-label mono">Loyalty Level</div>
       <div class="ticket-strip" id="ticketStrip"></div>
       <div class="progress-percent mono" id="progressPercent">0%</div>
+      <div style="margin-top: 12px;"><span class="mono" style="font-size: 12px; text-decoration: underline; cursor: pointer; color: #6b6b70;" onclick="showBadgeGuidePage()">How is this calculated?</span></div>
     </div>
 
     <div id="mainView">
@@ -339,15 +340,15 @@ const WALLETCONNECT_PROJECT_ID = "66a078c73dfce6e101e873f5cc6e0e8b";
 const LEADERBOARD_API_URL = "https://script.google.com/macros/s/AKfycbwYPL48XHqg6XLuGuX3ICab02CtV73KUvs7JkyMzvd54Br3MwSX1M-jPA4zHFaflDQzyA/exec";
 
 const ALBUM_GROUPS = [
-  { key: "girls",   label: "Girls",         icon: "👑", chain: "matic", slug: "metamusex-pfp", traitsUnavailable: true },
+  { key: "girls",   label: "Girls",         icon: "👑", chain: "matic", slug: "metamusex-pfp", traitsUnavailable: true, completionThreshold: 30 },
   { key: "men",     label: "Men",           icon: "🤠", chain: "ethereum", slug: "metamusex-men-official", rareFindAlsoIfOwns: ["onefone", "3dbase", "dolly3d"] },
   { key: "summer",  label: "Summer Vibes",  icon: "🌴", chain: "robinhood", slug: "metamusex-summer-vibes" },
   { key: "onefone",  label: "1/1",         icon: "🎈", chain: "matic", slug: "metamusex-custom", special: true },
-  { key: "3dbase",  label: "3D",            icon: "🌀", chain: "matic", slug: "metamusex-3d", special: true },
+  { key: "3dbase",  label: "3D",            icon: "🌀", chain: "matic", slug: "metamusex-3d", special: true, completionThreshold: 1 },
   { key: "farm",    label: "Dolly's Farm",  icon: "🐄", chain: "matic",    slug: "dolly-s-farm-pol" },
   { key: "crazy",    label: "Crazy Dolly",  icon: "🐄", chain: "base",    slug: "crazydolly-men" },
-  { key: "dolly3d",    label: "Dolly 3D",  icon: "🐄", chain: "base",    slug: "dolly3d", special: true },
-  { key: "dollygenesis", label: "Dollygenesis", icon: "🧬", chain: "matic", slug: "dollygenesis", special: true }
+  { key: "dolly3d",    label: "Dolly 3D",  icon: "🐄", chain: "base",    slug: "dolly3d", special: true, completionThreshold: 1 },
+  { key: "dollygenesis", label: "Dollygenesis", icon: "🧬", chain: "matic", slug: "dollygenesis", special: true, completionThreshold: 1 }
 ];
 
 const TRAIT_PAGES = [];
@@ -1122,7 +1123,7 @@ async function loadAlbum(address) {
 
   renderAlbumGrid(byGroup);
   renderGroupPages(byGroup, traitsMeta, badgeData);
-  renderProgress(byGroup);
+  renderProgress(badgeData);
   renderBadges(badgeData);
   loadSeriesImages(byGroup);
   loadSpecialFullCollections(byGroup);
@@ -1473,13 +1474,22 @@ function hideTraitPages() {
   document.querySelectorAll(".trait-page").forEach((p) => p.classList.remove("active"));
 }
 
-function renderProgress(byGroup) {
+function renderProgress(data) {
   const total = ALBUM_GROUPS.length;
-  const owned = ALBUM_GROUPS.filter((g) => (byGroup[g.key] || []).length > 0).length;
-  const pct = Math.round((owned / total) * 100);
+  let sum = 0;
   ticketStrip.innerHTML = "";
-  for (let i = 0; i < total; i++) { const t = document.createElement("div"); t.className = "ticket" + (i < owned ? " filled" : ""); ticketStrip.appendChild(t); }
-  progressPercent.textContent = pct + "%";
+  ALBUM_GROUPS.forEach((group) => {
+    const pct = groupCompletionPct(data, group);
+    sum += pct;
+    const t = document.createElement("div");
+    t.className = "ticket" + (pct >= 100 ? " filled" : "");
+    if (pct > 0 && pct < 100) {
+      t.style.background = `linear-gradient(90deg, var(--pink) ${pct}%, transparent ${pct}%), repeating-linear-gradient(90deg, var(--grey), var(--grey) 6px, transparent 6px, transparent 9px)`;
+    }
+    t.title = `${group.label}: ${pct}%`;
+    ticketStrip.appendChild(t);
+  });
+  progressPercent.textContent = (total > 0 ? Math.round(sum / total) : 0) + "%";
 }
 
 function countChainsOwned(data) {
@@ -1568,9 +1578,29 @@ function isGroupCompleted(data, group) {
   return isCollectionFullyMaxed(data, group.key);
 }
 
+// Quanto è "completa" una singola collezione, in percentuale (0-100). Per le
+// collezioni con trait, si basa su quanti valori di trait possiedi rispetto
+// al totale esistente — non solo "ne possiedo almeno uno". Per le collezioni
+// speciali (senza trait) e per quelle senza dati trait disponibili, si usa
+// un proxy più semplice basato sui pezzi posseduti. Questa funzione non
+// dipende in alcun modo dal numero di badge esistenti: puoi aggiungerne o
+// toglierne quanti vuoi in futuro senza che questo calcolo cambi.
+function groupCompletionPct(data, group) {
+  const items = data.byGroup[group.key] || [];
+  if (group.special) return Math.min(100, Math.round((items.length / (group.completionThreshold || SPECIAL_MASTER_MIN)) * 100));
+  if (group.traitsUnavailable) {
+    const threshold = group.completionThreshold || 1;
+    return Math.min(100, Math.round((items.length / threshold) * 100));
+  }
+  const stats = groupTraitStats(data, group.key);
+  if (stats) return stats.pct;
+  return items.length > 0 ? 100 : 0;
+}
+
 function albumCompletionPct(data) {
   if (ALBUM_GROUPS.length === 0) return 0;
-  return Math.round((data.groupsOwned.size / ALBUM_GROUPS.length) * 100);
+  const sum = ALBUM_GROUPS.reduce((acc, group) => acc + groupCompletionPct(data, group), 0);
+  return Math.round(sum / ALBUM_GROUPS.length);
 }
 
 function getSeriesBadges(group, data) {
@@ -1810,7 +1840,7 @@ const LEADERBOARD_METRICS = [
   { key: "totalBadges", label: "Badges Earned" },
   { key: "totalItems", label: "Total NFTs Owned" },
   { key: "collectionsCompleted", label: "Collections Completed" },
-  { key: "albumPct", label: "Album Completion %" },
+  { key: "albumPct", label: "Loyalty Level %" },
   { key: "collectionsOwned", label: "Collections Owned" },
 ];
 
@@ -1853,7 +1883,7 @@ function renderLeaderboardPage(sortKey) {
     <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
     <div class="section-title">Leaderboard <div class="bar"></div></div>
     <div class="mono" style="margin-bottom:14px; color:#6b6b70;">${leaderboardEntries.length} registered wallet${leaderboardEntries.length === 1 ? "" : "s"} (users who've connected to the album, not every on-chain holder). Sorted by: <select id="leaderboardSort" class="mono">${options}</select></div>
-    <table class="leaderboard-table"><thead><tr><th></th><th>Wallet</th><th>Badges</th><th>NFTs</th><th>Collections</th><th>Completed</th><th>Album %</th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="leaderboard-table"><thead><tr><th></th><th>Wallet</th><th>Badges</th><th>NFTs</th><th>Collections</th><th>Completed</th><th>Loyalty %</th></tr></thead><tbody>${rows}</tbody></table>
     <span class="back-link bottom" onclick="hideTraitPages()">&larr; Back to album</span>
   `;
   document.getElementById("leaderboardSort").addEventListener("change", (e) => renderLeaderboardPage(e.target.value));
@@ -1880,11 +1910,52 @@ function guideCardHtml(icon, name, desc) {
   return `<div class="guide-card"><div class="guide-icon">${icon}</div><div><div class="guide-name">${name}</div><div class="guide-desc">${desc}</div></div></div>`;
 }
 
+// Descrive, in una riga, cosa serve per portare al 100% una specifica
+// collezione nel calcolo del Loyalty Level. Attinge direttamente alla
+// configurazione di ALBUM_GROUPS (special / traitsUnavailable /
+// completionThreshold), così se in futuro cambi una soglia nel codice
+// questo testo si aggiorna da solo, senza rischio di disallineamento.
+function describeGroupCompletionCriterion(group) {
+  if (group.special) {
+    const threshold = group.completionThreshold || SPECIAL_MASTER_MIN;
+    return threshold <= 1
+      ? "Own at least 1 piece from this collection."
+      : `Own at least ${threshold} pieces from this collection (fewer pieces = partial credit).`;
+  }
+  if (group.traitsUnavailable) {
+    const threshold = group.completionThreshold || 1;
+    return threshold <= 1
+      ? "Own at least 1 piece from this collection."
+      : `Own at least ${threshold} pieces from this collection (fewer pieces = partial credit). Trait tracking isn't reliable for this collection yet, so piece count is used instead.`;
+  }
+  return "Own at least one piece with every existing trait value in this collection (not every NFT — just every trait value at least once).";
+}
+
+function buildLoyaltyLevelGuideHtml() {
+  const rows = ALBUM_GROUPS.map((g) => guideCardHtml(g.icon, g.label, describeGroupCompletionCriterion(g))).join("");
+  return `
+    <div class="panel" style="padding: 18px 20px; margin-bottom: 20px;">
+      <div style="font-weight: 700; margin-bottom: 8px;">What is the Loyalty Level?</div>
+      <div style="font-size: 14px; line-height: 1.55;">
+        The big percentage at the top of the album is your <strong>Loyalty Level</strong> — the average completion
+        across every collection listed below. It's deliberately <em>not</em> called "album completion", because it
+        isn't a fixed finish line: it's calculated against what exists <strong>today</strong>. If new MetaMuseX/Dolly
+        collections launch, or new badges get added down the line, there's simply more to collect — so your level
+        can shift over time even if you don't sell or change anything. Think of it as an ongoing engagement score,
+        not a one-time 100% you unlock and forget.
+      </div>
+    </div>
+    <div class="guide-list">${rows}</div>
+  `;
+}
+
 function showBadgeGuidePage() {
   badgeGuidePage.innerHTML = `
     <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
     <div class="section-title">Badge Guide <div class="bar"></div></div>
-    <div class="section-title" style="margin-top:0; font-size:20px;">General Badges <div class="bar"></div></div>
+    <div class="section-title" style="margin-top:0; font-size:20px;">How to Reach 100% Loyalty Level <div class="bar"></div></div>
+    ${buildLoyaltyLevelGuideHtml()}
+    <div class="section-title" style="margin-top:32px; font-size:20px;">General Badges <div class="bar"></div></div>
     <div class="guide-list">${GENERAL_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div>
     <div class="section-title" style="margin-top:32px; font-size:20px;">Collection Badges <div class="bar"></div></div>
     <div class="guide-list">${COLLECTION_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div>
