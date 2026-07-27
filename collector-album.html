@@ -59,7 +59,13 @@
   button:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
   button:disabled { opacity: 0.55; cursor: default; box-shadow: var(--shadow-hard-sm); }
   button.secondary { background: var(--paper); color: var(--ink); }
-  button.share-x { background: var(--ink); color: var(--paper); }
+  button.share-x {
+    background: var(--paper); color: var(--ink); font-family: 'Space Mono', monospace;
+    font-size: 13px; font-weight: 700; border: 2px solid var(--ink); border-radius: 999px;
+    padding: 9px 18px; box-shadow: var(--shadow-hard-sm); align-self: center;
+  }
+  button.share-x:hover { background: var(--yellow); transform: translate(-1px, -1px); box-shadow: var(--shadow-hard-sm); }
+  button.share-x:active { transform: translate(1px, 1px); box-shadow: 0 0 0 var(--ink); }
   .wallet-chip {
     display: inline-flex; align-items: center; gap: 8px; margin-top: 18px;
     font-family: 'Space Mono', monospace; font-size: 13px; background: var(--ink); color: var(--paper);
@@ -171,11 +177,17 @@
   .leaderboard-table th { font-family: 'Space Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #6b6b70; }
   .leaderboard-table tr:last-child td { border-bottom: none; }
   .leaderboard-row-you { background: var(--yellow); }
+  .leaderboard-wallet-frame { display: inline-block; padding: 3px 10px; border-radius: 999px; border: 2px solid transparent; }
+  tr.rank-gold .leaderboard-wallet-frame { border-color: var(--yellow); background: rgba(255, 201, 60, 0.18); }
+  tr.rank-silver .leaderboard-wallet-frame { border-color: #B9B2A4; background: rgba(185, 178, 164, 0.22); }
+  tr.rank-bronze .leaderboard-wallet-frame { border-color: #CD7F32; background: rgba(205, 127, 50, 0.16); }
   .guide-list { display: flex; flex-direction: column; gap: 12px; }
   .guide-card { background: var(--paper); border: 3px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow-hard-sm); padding: 14px 18px; display: flex; gap: 14px; align-items: flex-start; }
   .guide-card .guide-icon { font-size: 28px; line-height: 1; }
   .guide-card .guide-name { font-weight: 700; margin-bottom: 4px; }
   .guide-card .guide-desc { font-size: 13px; color: #55555a; line-height: 1.4; }
+  .guide-card.suggestion { border-color: var(--pink); }
+  .guide-card.suggestion .guide-desc a { color: var(--pink); font-weight: 700; }
   .airdrop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 8px; }
   .airdrop-item-card {
     display: block; background: var(--paper); border: 3px solid var(--ink); border-radius: 10px;
@@ -198,6 +210,10 @@
   }
   .collection-buy-link:hover { text-decoration: underline; }
   .empty-state { text-align: center; padding: 60px 24px; color: #6b6b70; }
+  .loyalty-chip {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; font-family: 'Space Mono', monospace;
+    font-size: 12px; background: var(--paper); border: 2px solid var(--ink); border-radius: 999px; padding: 5px 12px;
+  }
   .badge-unlock-overlay {
     position: fixed; inset: 0; background: rgba(27, 27, 31, 0.6); display: flex; align-items: center;
     justify-content: center; z-index: 1000; padding: 20px;
@@ -269,6 +285,7 @@
       <div class="ticket-strip" id="ticketStrip"></div>
       <div class="progress-percent mono" id="progressPercent">0%</div>
       <div class="display" id="collectorRankTitle" style="font-size: 26px; color: var(--purple); margin-top: 4px; text-shadow: 2px 2px 0 var(--ink);"></div>
+      <div id="loyaltyChip"></div>
       <div style="margin-top: 10px;"><span class="mono" style="font-size: 12px; text-decoration: underline; cursor: pointer; color: #6b6b70;" onclick="showBadgeGuidePage()">How is this calculated?</span></div>
     </div>
 
@@ -302,6 +319,17 @@
     <div class="badge-unlock-actions">
       <button type="button" class="share-x" id="badgeUnlockShareBtn">𝕏 Share on X</button>
       <button type="button" id="badgeUnlockCloseBtn">Awesome!</button>
+    </div>
+  </div>
+</div>
+
+<div id="levelUpOverlay" class="badge-unlock-overlay" style="display:none;">
+  <div class="badge-unlock-modal panel">
+    <div class="badge-unlock-title display">Level Up! 🚀</div>
+    <div id="levelUpRankIcon" style="font-size: 60px; margin-bottom: 8px;"></div>
+    <div id="levelUpRankTitle" class="display" style="font-size: 28px; color: var(--purple); margin-bottom: 20px; text-shadow: 2px 2px 0 var(--ink);"></div>
+    <div class="badge-unlock-actions">
+      <button type="button" id="levelUpCloseBtn">Nice!</button>
     </div>
   </div>
 </div>
@@ -449,6 +477,92 @@ const BADGES = [
 ];
 
 // ==========================================================
+// SECRET BADGES — badge "misteriosi": non compaiono nella Badge Guide né
+// altrove finché non vengono sbloccati. Alcuni richiedono il possesso di
+// NFT specifici (es. premi vinti nel gioco Discord "Muse Battle"), altri
+// derivano da combinazioni particolari dei dati già disponibili.
+// ==========================================================
+
+// Contratto/chain su cui vivono i pezzi premio del gioco Discord "Muse Battle".
+const SECRET_ITEMS_CHAIN = "matic";
+const SECRET_ITEMS_CONTRACT = "0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6";
+
+const LOYALTY_TIERS = [
+  { min: 1, icon: "👋", label: "Newcomer" },
+  { min: 3, icon: "🔁", label: "Regular" },
+  { min: 7, icon: "🔥", label: "Devoted" },
+  { min: 15, icon: "🌟", label: "Superfan" },
+  { min: 30, icon: "🏵️", label: "Legend" },
+];
+
+function getLoyaltyTier(days) {
+  let tier = LOYALTY_TIERS[0];
+  LOYALTY_TIERS.forEach((t) => { if (days >= t.min) tier = t; });
+  return tier;
+}
+
+function countUltraRareTraitsOwned(data) {
+  let count = 0;
+  ALBUM_GROUPS.forEach((g) => {
+    if (g.special || g.traitsUnavailable) return;
+    count += getRareTraitValuesOwned(data, g.key, RARE_TRAIT_MAX_COUNT).filter((r) => r.earned).length;
+  });
+  return count;
+}
+
+const SECRET_BADGES = [
+  {
+    key: "musebattle-wildwest",
+    icon: "🤠",
+    label: "Muse Battle: Wild West Chronicles 2025-26",
+    desc: "Won by claiming both Wild West Chronicles prize pieces from Discord's Muse Battle game.",
+    check: (data) => !!(data.secretOwnedIds && data.secretOwnedIds.has("81") && data.secretOwnedIds.has("82")),
+  },
+  {
+    key: "men-devotee",
+    icon: "❤️",
+    label: "Men's Collection Devotee",
+    desc: "Awarded to true fans of the Men collection who hold this special piece.",
+    check: (data) => !!(data.secretOwnedIds && data.secretOwnedIds.has("88")),
+  },
+  {
+    key: "chain-master",
+    icon: "🌉",
+    label: "Chain Master",
+    desc: `Own at least one NFT on every blockchain used across the album (${[...new Set(ALBUM_GROUPS.map((g) => g.chain))].length} chains).`,
+    check: (data) => countChainsOwned(data) >= new Set(ALBUM_GROUPS.map((g) => g.chain)).size,
+  },
+  {
+    key: "rare-hunter",
+    icon: "🐋",
+    label: "Rare Hunter",
+    desc: "Own 3 or more ultra-rare trait values across your whole collection.",
+    check: (data) => countUltraRareTraitsOwned(data) >= 3,
+  },
+  {
+    key: "special-ops",
+    icon: "🕶️",
+    label: "Special Ops",
+    desc: "Own at least one piece from every special collection: 1/1, 3D, Dolly 3D, and Dollygenesis.",
+    check: (data) => ["onefone", "3dbase", "dolly3d", "dollygenesis"].every((k) => (data.byGroup[k] || []).length > 0),
+  },
+  {
+    key: "loyal-visitor",
+    icon: "📅",
+    label: "Loyal Visitor",
+    desc: "Came back to check the album on 7 different days.",
+    check: (data) => (data.visitDays || 0) >= 7,
+  },
+  {
+    key: "midnight-collector",
+    icon: "🌙",
+    label: "Midnight Collector",
+    desc: "Checked the album between midnight and 5am. The collection never sleeps.",
+    check: () => { const h = new Date().getHours(); return h >= 0 && h < 5; },
+  },
+];
+
+// ==========================================================
 // CONDIVISIONE SU X — testo del tweet quando l'utente condivide un badge
 // o le proprie statistiche. Modifica pure gli hashtag/il tono qui.
 // ==========================================================
@@ -468,6 +582,8 @@ const COLLECTOR_RANKS = [
   { min: 80, title: "Master Collector" },
   { min: 100, title: "Legendary Collector" },
 ];
+
+const COLLECTOR_RANK_ICONS = ["🌱", "🙂", "💪", "🔷", "👑", "🏆"];
 
 function getCollectorRank(pct) {
   let rank = COLLECTOR_RANKS[0];
@@ -493,6 +609,7 @@ const badgeRow = document.getElementById("badgeRow");
 const ticketStrip = document.getElementById("ticketStrip");
 const progressPercent = document.getElementById("progressPercent");
 const collectorRankTitle = document.getElementById("collectorRankTitle");
+const loyaltyChip = document.getElementById("loyaltyChip");
 const statsBtn = document.getElementById("statsBtn");
 const airdropBtn = document.getElementById("airdropBtn");
 const badgeGuideBtn = document.getElementById("badgeGuideBtn");
@@ -524,6 +641,7 @@ badgeGuideBtn.addEventListener("click", showBadgeGuidePage);
 leaderboardBtn.addEventListener("click", showLeaderboardPage);
 document.getElementById("badgeUnlockCloseBtn").addEventListener("click", hideBadgeUnlockPopup);
 document.getElementById("badgeUnlockShareBtn").addEventListener("click", shareUnlockedBadgesOnX);
+document.getElementById("levelUpCloseBtn").addEventListener("click", hideLevelUpPopup);
 document.getElementById("wcCloseBtn").addEventListener("click", () => hideWalletConnectModal(true));
 document.getElementById("wcCopyBtn").addEventListener("click", copyWalletConnectUri);
 
@@ -724,6 +842,67 @@ function shareUnlockedBadgesOnX() {
     console.warn("Could not generate badge share image:", err);
   }
   shareOnX(text);
+}
+
+// ==========================================================
+// CONFETTI — piccola animazione vanilla (nessuna libreria esterna) da
+// far partire nel momento in cui si sblocca un badge o si sale di
+// Collector Rank, per rendere il momento più soddisfacente. Rispetta
+// prefers-reduced-motion, come il resto del sito.
+// ==========================================================
+
+function prefersReducedMotion() {
+  return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function fireConfetti() {
+  if (prefersReducedMotion()) return;
+  const canvas = document.createElement("canvas");
+  canvas.style.position = "fixed";
+  canvas.style.inset = "0";
+  canvas.style.zIndex = "1100";
+  canvas.style.pointerEvents = "none";
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  const colors = ["#FF3D7F", "#2E6DF2", "#FFC93C", "#8B5CF6", "#4ADE80"];
+  const particles = Array.from({ length: 140 }, () => ({
+    x: Math.random() * canvas.width,
+    y: -20 - Math.random() * canvas.height * 0.4,
+    r: 4 + Math.random() * 5,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    vx: -2 + Math.random() * 4,
+    vy: 2 + Math.random() * 3,
+    rot: Math.random() * 360,
+    vr: -6 + Math.random() * 12,
+    shape: Math.random() < 0.5 ? "rect" : "circle",
+  }));
+  let frame = 0;
+  const maxFrames = 130;
+  function step() {
+    frame++;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach((p) => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.04;
+      p.rot += p.vr;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate((p.rot * Math.PI) / 180);
+      ctx.fillStyle = p.color;
+      if (p.shape === "rect") ctx.fillRect(-p.r, -p.r * 0.6, p.r * 2, p.r * 1.2);
+      else { ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore();
+    });
+    if (frame < maxFrames) {
+      requestAnimationFrame(step);
+    } else {
+      canvas.remove();
+    }
+  }
+  requestAnimationFrame(step);
 }
 
 // ==========================================================
@@ -1110,6 +1289,39 @@ async function fetchOwnedNFTs(address, chain, slug) {
   return data.nfts || [];
 }
 
+// Recupera (fino a qualche pagina) TUTTI gli NFT posseduti da un wallet su
+// una chain, senza filtrare per collezione — usato solo per verificare il
+// possesso dei pezzi "segreti" premio del gioco Discord (identificati per
+// indirizzo di contratto, non per slug di collezione).
+async function fetchOwnedNFTsAllCollections(address, chain, maxPages = 3) {
+  let all = [], next;
+  for (let page = 0; page < maxPages; page++) {
+    const url = `https://api.opensea.io/api/v2/chain/${chain}/account/${address}/nfts?limit=200${next ? `&next=${encodeURIComponent(next)}` : ""}`;
+    const { ok, status, data } = await fetchOpenSeaJson(url);
+    if (!ok) { console.warn(`OpenSea API error fetching all NFTs on ${chain}:`, status); break; }
+    all = all.concat(data.nfts || []);
+    next = data.next;
+    if (!next) break;
+  }
+  return all;
+}
+
+async function fetchSecretItemOwnership(address) {
+  try {
+    const items = await fetchOwnedNFTsAllCollections(address, SECRET_ITEMS_CHAIN, 3);
+    const owned = new Set();
+    items.forEach((item) => {
+      if (item.contract && item.contract.toLowerCase() === SECRET_ITEMS_CONTRACT.toLowerCase() && item.identifier != null) {
+        owned.add(String(item.identifier));
+      }
+    });
+    return owned;
+  } catch (err) {
+    console.warn("Could not check secret item ownership:", err);
+    return new Set();
+  }
+}
+
 async function fetchCollectionTraits(slug) {
   const url = `https://api.opensea.io/api/v2/traits/${slug}`;
   const { ok, status, data } = await fetchOpenSeaJson(url);
@@ -1140,13 +1352,19 @@ async function loadAlbum(address) {
     traitsMeta[group.key] = traitsData;
   });
 
+  const secretOwnedIds = await fetchSecretItemOwnership(address);
+  const visitDays = recordVisitDay(address);
+
   const badgeData = buildBadgeData(byGroup, traitsMeta);
+  badgeData.secretOwnedIds = secretOwnedIds;
+  badgeData.visitDays = visitDays;
   lastTraitsMeta = traitsMeta;
   lastBadgeData = badgeData;
 
   renderAlbumGrid(byGroup);
   renderGroupPages(byGroup, traitsMeta, badgeData);
   renderProgress(badgeData);
+  renderLoyalty(visitDays);
   renderBadges(badgeData);
   loadSeriesImages(byGroup);
   loadSpecialFullCollections(byGroup);
@@ -1154,13 +1372,78 @@ async function loadAlbum(address) {
   // Invia le statistiche aggiornate alla leaderboard condivisa (Google Sheets).
   submitLeaderboardStats(address, badgeData);
 
-  await checkNewlyEarnedBadges(address, badgeData);
+  const newlyEarned = await checkNewlyEarnedBadges(address, badgeData);
+  if (!newlyEarned || newlyEarned.length === 0) {
+    checkRankLevelUp(address, albumCompletionPct(badgeData));
+  }
 }
 
 // Il tracking di "quali badge avevo già la scorsa visita" (usato solo per
 // mostrare il popup "nuovo badge sbloccato") è dato personale e locale al
 // browser dell'utente: usiamo localStorage, non lo sheet condiviso.
 const EARNED_BADGES_STORAGE_PREFIX = "metamusex-earned-badges:";
+// Tracking dei giorni di visita distinti (streak/engagement), anch'esso
+// locale al browser — non è dato di possesso, quindi non va sullo sheet
+// condiviso della leaderboard.
+const VISIT_DAYS_STORAGE_PREFIX = "metamusex-visit-days:";
+// Ultimo Collector Rank visto, usato solo per rilevare un "level up"
+// rispetto alla visita precedente.
+const RANK_LEVEL_STORAGE_PREFIX = "metamusex-rank-level:";
+
+function recordVisitDay(address) {
+  try {
+    const key = `${VISIT_DAYS_STORAGE_PREFIX}${address.toLowerCase()}`;
+    const today = new Date().toISOString().slice(0, 10);
+    let days = [];
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) days = JSON.parse(raw);
+    } catch (err) { days = []; }
+    if (!Array.isArray(days)) days = [];
+    if (!days.includes(today)) days.push(today);
+    localStorage.setItem(key, JSON.stringify(days));
+    return days.length;
+  } catch (err) {
+    console.warn("Could not record visit day:", err);
+    return 1;
+  }
+}
+
+function renderLoyalty(visitDays) {
+  if (!loyaltyChip) return;
+  const tier = getLoyaltyTier(visitDays);
+  loyaltyChip.innerHTML = `<div class="loyalty-chip">${tier.icon} ${tier.label} &middot; visited ${visitDays} day${visitDays === 1 ? "" : "s"}</div>`;
+}
+
+function checkRankLevelUp(address, overallPct) {
+  try {
+    const key = `${RANK_LEVEL_STORAGE_PREFIX}${address.toLowerCase()}`;
+    const newRank = getCollectorRank(overallPct);
+    const newIndex = COLLECTOR_RANKS.indexOf(newRank);
+    let prevIndex = null;
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw !== null) prevIndex = Number(raw);
+    } catch (err) { prevIndex = null; }
+    localStorage.setItem(key, String(newIndex));
+    if (prevIndex !== null && !Number.isNaN(prevIndex) && newIndex > prevIndex) {
+      showLevelUpPopup(newRank, newIndex);
+    }
+  } catch (err) {
+    console.warn("Could not check rank level up:", err);
+  }
+}
+
+function showLevelUpPopup(rank, index) {
+  document.getElementById("levelUpRankTitle").textContent = rank.title;
+  document.getElementById("levelUpRankIcon").textContent = COLLECTOR_RANK_ICONS[index] || "🎉";
+  document.getElementById("levelUpOverlay").style.display = "flex";
+  fireConfetti();
+}
+
+function hideLevelUpPopup() {
+  document.getElementById("levelUpOverlay").style.display = "none";
+}
 
 async function checkNewlyEarnedBadges(address, badgeData) {
   try {
@@ -1176,14 +1459,16 @@ async function checkNewlyEarnedBadges(address, badgeData) {
     }
 
     localStorage.setItem(key, JSON.stringify(earnedNowLabels));
-    if (previousLabels === null) return;
+    if (previousLabels === null) return [];
 
     const previousSet = new Set(previousLabels);
     const allBadgesNow = getAllBadgesFlat(badgeData);
     const newlyEarned = allBadgesNow.filter((b) => b.earned && !previousSet.has(b.label));
     if (newlyEarned.length > 0) showBadgeUnlockPopup(newlyEarned);
+    return newlyEarned;
   } catch (err) {
     console.warn("Could not check for newly earned badges:", err);
+    return [];
   }
 }
 
@@ -1203,6 +1488,7 @@ function showBadgeUnlockPopup(newBadges) {
     }
   }
   overlay.style.display = "flex";
+  fireConfetti();
 }
 
 function hideBadgeUnlockPopup() {
@@ -1753,9 +2039,53 @@ function getRarestOwnedPiece(data) {
   return best;
 }
 
+// ==========================================================
+// SUGGERIMENTI MIRATI — nella pagina Stats, individua i trait type in cui
+// manca esattamente UN valore per completare il relativo badge "Master" di
+// una collezione, e lo segnala con un'azione precisa (quale valore cercare
+// e dove comprarlo), invece del solo numero generico di completamento.
+// ==========================================================
+
+function getGroupMissingTraitValues(data, groupKey, traitType) {
+  const normMeta = getNormalizedTraitsMeta(data.traitsMeta && data.traitsMeta[groupKey]);
+  if (!normMeta || !normMeta.counts[traitType]) return [];
+  const normCounts = buildNormalizedCounts(normMeta.counts[traitType]);
+  const allValues = Object.keys(normCounts);
+  const owned = new Set();
+  (data.byGroup[groupKey] || []).forEach((item) => { (item.traits || []).forEach((t) => { if (normTraitType(t.trait_type) === traitType) owned.add(normTraitValue(t.value)); }); });
+  return allValues.filter((v) => !owned.has(v));
+}
+
+function getNearCompleteTraitSuggestions(data, maxResults = 3) {
+  const suggestions = [];
+  ALBUM_GROUPS.forEach((group) => {
+    if (group.special || group.traitsUnavailable) return;
+    const normMeta = getNormalizedTraitsMeta(data.traitsMeta && data.traitsMeta[group.key]);
+    if (!normMeta) return;
+    Object.keys(normMeta.counts).forEach((traitType) => {
+      if (normMeta.categories[traitType] && normMeta.categories[traitType] !== "string") return;
+      if (isTraitTypeComplete(data, group.key, traitType)) return;
+      const missing = getGroupMissingTraitValues(data, group.key, traitType);
+      if (missing.length === 1) suggestions.push({ group, traitType, missingValue: missing[0] });
+    });
+  });
+  return suggestions.slice(0, maxResults);
+}
+
+function buildSuggestionsHtml(data) {
+  const suggestions = getNearCompleteTraitSuggestions(data);
+  if (suggestions.length === 0) return "";
+  const cards = suggestions.map((s) => {
+    const buyUrl = openSeaTraitBuyUrl(s.group.slug, s.traitType, s.missingValue);
+    return `<div class="guide-card suggestion"><div class="guide-icon">🎯</div><div><div class="guide-name">You're 1 trait away from the "${s.traitType} Master" badge in ${s.group.label}!</div><div class="guide-desc">Grab a piece with "${s.traitType}: ${s.missingValue}" to complete it. <a href="${buyUrl}" target="_blank" rel="noopener noreferrer">Find it on OpenSea &rarr;</a></div></div></div>`;
+  }).join("");
+  return `<div class="section-title" style="margin-top:32px;">Almost There <div class="bar"></div></div><div class="guide-list">${cards}</div>`;
+}
+
 function buildStatsPageHtml(data) {
   const rarest = getRarestOwnedPiece(data);
   const allBadges = getAllBadgesFlat(data);
+  const visibleBadges = allBadges.filter((b) => b.earned || !b.secret);
   const totalBadgesEarned = allBadges.filter((b) => b.earned).length;
 
   return `
@@ -1767,14 +2097,15 @@ function buildStatsPageHtml(data) {
       <div class="stat-card"><div class="stat-value display">${totalBadgesEarned}/${allBadges.length}</div><div class="stat-label mono">Badges Obtained</div></div>
       <div class="stat-card"><div class="stat-value display">${countChainsOwned(data)}</div><div class="stat-label mono">Chains</div></div>
     </div>
-    <div class="share-row" style="flex-direction: column; gap: 8px;">
+    <div class="share-row" style="flex-direction: column; align-items: center; gap: 8px;">
       <button type="button" class="share-x" id="shareStatsBtn">𝕏 Share my stats on X</button>
       <div class="mono" style="font-size: 12px; color: #6b6b70; text-align: center; max-width: 420px;">Downloads a shareable stats image and opens the tweet composer — attach the image to your tweet before posting (X doesn't allow auto-attaching images from a link).</div>
     </div>
+    ${buildSuggestionsHtml(data)}
     ${rarest ? `<div class="section-title" style="margin-top:32px;">Rarest Piece Owned <div class="bar"></div></div><div class="panel" style="padding:16px 20px;"><strong>${rarest.itemName}</strong> (${rarest.groupLabel}) — ${rarest.traitType}: ${rarest.value}<span class="mono" style="color:#6b6b70;"> &middot; only ${rarest.count} in existence</span></div>` : ""}
     <div class="section-title" style="margin-top:32px;">All Badges <div class="bar"></div></div>
     <div class="mono" style="margin-bottom:12px; color:#6b6b70;">${totalBadgesEarned}/${allBadges.length} badges obtained</div>
-    <div class="badge-row panel">${allBadges.map((b) => badgeHtml(b.icon, b.label, b.earned, isPrestigeBadge(b.label))).join("")}</div>
+    <div class="badge-row panel">${visibleBadges.map((b) => badgeHtml(b.icon, b.label, b.earned, isPrestigeBadge(b.label))).join("")}</div>
     <span class="back-link bottom" onclick="hideTraitPages()">&larr; Back to album</span>
   `;
 }
@@ -1809,6 +2140,7 @@ async function fetchAllCollectionNFTs(slug, maxPages = 25, maxItems = Infinity) 
 function countAllBadgesEarned(data) {
   let count = BADGES.filter((b) => b.check(data)).length;
   ALBUM_GROUPS.forEach((group) => { count += getGroupBadges(group, data).filter((b) => b.earned).length; });
+  count += SECRET_BADGES.filter((b) => b.check(data)).length;
   return count;
 }
 
@@ -1845,6 +2177,7 @@ function describeGroupBadge(group, name) {
 function getAllBadgesFlat(data) {
   const badges = BADGES.map((b) => ({ icon: b.icon, label: b.label, name: b.label, earned: b.check(data), desc: describeGeneralBadge(b.label) }));
   ALBUM_GROUPS.forEach((group) => { getGroupBadges(group, data).forEach((b) => { badges.push({ icon: b.icon, label: `${group.icon} ${group.label}: ${b.label}`, name: b.label, earned: b.earned, desc: describeGroupBadge(group, b.label) }); }); });
+  SECRET_BADGES.forEach((b) => { badges.push({ icon: b.icon, label: b.label, name: b.label, earned: !!b.check(data), desc: b.desc, secret: true }); });
   return badges;
 }
 
@@ -1900,8 +2233,10 @@ function renderLeaderboardPage(sortKey) {
   const options = LEADERBOARD_METRICS.map((m) => `<option value="${m.key}" ${m.key === sortKey ? "selected" : ""}>${m.label}</option>`).join("");
   const rows = sorted.slice(0, 50).map((e, i) => {
     const rankLabel = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
+    const rankClass = i === 0 ? "rank-gold" : i === 1 ? "rank-silver" : i === 2 ? "rank-bronze" : "";
     const isYou = currentAddress && e.address === currentAddress.toLowerCase();
-    return `<tr class="${isYou ? "leaderboard-row-you" : ""}"><td>${rankLabel}</td><td class="mono">${shortAddress(e.address)}${isYou ? " (you)" : ""}</td><td class="mono">${e.totalBadges}</td><td class="mono">${e.totalItems}</td><td class="mono">${e.collectionsOwned}/${ALBUM_GROUPS.length}</td><td class="mono">${e.collectionsCompleted}</td><td class="mono">${e.albumPct}%</td><td>${getCollectorRank(e.albumPct).title}</td></tr>`;
+    const rowClass = [isYou ? "leaderboard-row-you" : "", rankClass].filter(Boolean).join(" ");
+    return `<tr class="${rowClass}"><td>${rankLabel}</td><td class="mono"><span class="leaderboard-wallet-frame">${shortAddress(e.address)}${isYou ? " (you)" : ""}</span></td><td class="mono">${e.totalBadges}</td><td class="mono">${e.totalItems}</td><td class="mono">${e.collectionsOwned}/${ALBUM_GROUPS.length}</td><td class="mono">${e.collectionsCompleted}</td><td class="mono">${e.albumPct}%</td><td>${getCollectorRank(e.albumPct).title}</td></tr>`;
   }).join("");
 
   leaderboardPage.innerHTML = `
@@ -1990,6 +2325,7 @@ function showBadgeGuidePage() {
     <div class="guide-list">${GENERAL_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div>
     <div class="section-title" style="margin-top:32px; font-size:20px;">Collection Badges <div class="bar"></div></div>
     <div class="guide-list">${COLLECTION_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div>
+    <div class="mono" style="margin-top:28px; color:#6b6b70; font-size:13px;">Psst — not every badge is listed here. Some are secret and only reveal themselves once you've earned them...</div>
     <span class="back-link bottom" onclick="hideTraitPages()">&larr; Back to album</span>
   `;
   mainView.style.display = "none";
