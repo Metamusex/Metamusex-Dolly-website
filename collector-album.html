@@ -1923,14 +1923,16 @@ function renderGroupPages(byGroup, traitsMeta, badgeData) {
     const items = byGroup[group.key] || [];
     if (items.length === 0) return;
 
-    if (group.key === RELAX_GROUP_KEY) {
-      items.forEach((item) => { if (item.identifier != null) RELAX_ITEMS_BY_ID[String(item.identifier)] = item; });
+    const relaxConfig = RELAX_COLLECTIONS[group.key];
+    if (relaxConfig) {
+      RELAX_ITEMS_BY_ID[group.key] = RELAX_ITEMS_BY_ID[group.key] || {};
+      items.forEach((item) => { if (item.identifier != null) RELAX_ITEMS_BY_ID[group.key][String(item.identifier)] = item; });
     }
 
     const itemsHtml = items.map((item) => {
       const thumb = itemThumbHtml(item, group.icon);
-      const relaxHtml = group.key === RELAX_GROUP_KEY
-        ? `<div class="relax-widget-container" id="relax-widget-${item.identifier}">${relaxWidgetHtml(currentAddress, group.slug, item.identifier)}</div>`
+      const relaxHtml = (relaxConfig && relaxConfig.enabled)
+        ? `<div class="relax-widget-container" id="relax-widget-${group.key}-${item.identifier}">${relaxWidgetHtml(group.key, item.identifier)}</div>`
         : "";
       return `<div class="owned-item-card">${thumb}<div class="item-name">${escapeHtml(getItemName(item))}</div>${relaxHtml}</div>`;
     }).join("");
@@ -2841,13 +2843,25 @@ async function loadAirdropData() {
 }
 
 /* ============================================================
-   RELAX SYSTEM — solo per la collezione Summer Vibes
+   RELAX SYSTEM — configurabile per più collezioni.
+   Per aggiungere/attivare una collezione: aggiungi/abilita la sua
+   voce in RELAX_COLLECTIONS con lo slug giusto e l'ordine dei layer.
    ============================================================ */
 
-const RELAX_GROUP_KEY = "summer"; // deve combaciare con la key in ALBUM_GROUPS
-const RELAX_COLLECTION_SLUG = "metamusex-summer-vibes";
-const RELAX_GROUP_CHAIN = (ALBUM_GROUPS.find((g) => g.key === RELAX_GROUP_KEY) || {}).chain || "robinhood";
-const RELAX_ITEMS_BY_ID = {}; // popolato in renderGroupPages con gli item posseduti di questo gruppo
+const RELAX_COLLECTIONS = {
+  summer: {
+    slug: "metamusex-summer-vibes",
+    enabled: false, // nascosto per ora: tratti non ancora rivelati
+    layerOrder: ["eyes", "body", "mouth", "outfit", "hair", "glasses", "accessories"],
+  },
+  men: {
+    slug: "metamusex-men-official",
+    enabled: true,
+    layerOrder: ["body", "eyes", "clothes", "glasses", "hair-and-hat", "accessory", "mouth"],
+  },
+};
+
+const RELAX_ITEMS_BY_ID = {}; // { [groupKey]: { [identifier]: item } }, popolato in renderGroupPages
 
 // Soglie CUMULATIVE in giorni dall'inizio del riposo (non resettabili)
 // Livello 1: 3gg totali | Livello 2: 3+6=9gg | Livello 3: 9+20=29gg | Livello 4: 29+35=64gg
@@ -2860,21 +2874,42 @@ const REST_LEVEL_THRESHOLDS_DAYS = REST_LEVEL_DURATIONS_DAYS.reduce((acc, d) => 
 
 const RELAX_ASSET_BASE = "assets/relax";
 
-// Ordine layer Summer Vibes, dal più basso al più alto (Background escluso: lo sostituiamo noi)
-const COLLECTION_LAYER_ORDER = {
-  [RELAX_COLLECTION_SLUG]: ["eyes", "body", "mouth", "outfit", "hair", "glasses", "accessories"],
-};
-
 function slugifyRelax(str) {
   return String(str).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
-function restStorageKey(address, identifier) {
-  return `relax:${address.toLowerCase()}:${RELAX_COLLECTION_SLUG}:${identifier}`;
+function getRelaxChain(groupKey) {
+  return (ALBUM_GROUPS.find((g) => g.key === groupKey) || {}).chain || "ethereum";
 }
 
-function startRest(address, identifier) {
-  const key = restStorageKey(address, identifier);
+function restStorageKey(address, collectionSlug, identifier) {
+  return `relax:${address.toLowerCase()}:${collectionSlug}:${identifier}`;
+}
+
+// Cerca, per questo wallet e questa collezione, se c'è già un NFT a riposo
+// che NON ha ancora raggiunto il livello massimo (diverso da quello passato).
+// Un solo NFT "attivo" per collezione può riposare alla volta; una volta
+// raggiunto il livello massimo, si libera lo slot per un nuovo NFT.
+function getActiveRestForCollection(address, collectionSlug, excludingIdentifier) {
+  const prefix = `relax:${address.toLowerCase()}:${collectionSlug}:`;
+  const maxThreshold = REST_LEVEL_THRESHOLDS_DAYS[REST_LEVEL_THRESHOLDS_DAYS.length - 1];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    const identifier = key.slice(prefix.length);
+    if (String(identifier) === String(excludingIdentifier)) continue;
+    try {
+      const state = JSON.parse(localStorage.getItem(key));
+      const elapsedDays = (Date.now() - state.startedAt) / (1000 * 60 * 60 * 24);
+      if (elapsedDays >= maxThreshold) continue; // già maxato: non blocca più lo slot
+      return { identifier, ...state };
+    } catch (e) {}
+  }
+  return null;
+}
+
+function startRest(address, collectionSlug, identifier) {
+  const key = restStorageKey(address, collectionSlug, identifier);
   const existing = localStorage.getItem(key);
   if (existing) return JSON.parse(existing);
   const state = { startedAt: Date.now(), identifier };
@@ -2882,9 +2917,9 @@ function startRest(address, identifier) {
   return state;
 }
 
-function getRestState(address, identifier) {
+function getRestState(address, collectionSlug, identifier) {
   if (!address) return null;
-  const raw = localStorage.getItem(restStorageKey(address, identifier));
+  const raw = localStorage.getItem(restStorageKey(address, collectionSlug, identifier));
   if (!raw) return null;
   const state = JSON.parse(raw);
   const elapsedDays = (Date.now() - state.startedAt) / (1000 * 60 * 60 * 24);
@@ -2921,13 +2956,19 @@ async function isNftListedForSale(chain, contractAddress, identifier) {
   }
 }
 
-function relaxWidgetHtml(address, collectionSlug, identifier) {
-  if (!address) return `<div class="relax-widget"><div class="relax-status mono">Connetti il wallet per mettere a riposo</div></div>`;
+function relaxWidgetHtml(groupKey, identifier) {
+  const config = RELAX_COLLECTIONS[groupKey];
+  if (!config) return "";
+  if (!currentAddress) return `<div class="relax-widget"><div class="relax-status mono">Connetti il wallet per mettere a riposo</div></div>`;
 
-  const state = getRestState(address, identifier);
+  const state = getRestState(currentAddress, config.slug, identifier);
 
   if (!state) {
-    return `<div class="relax-widget"><button class="relax-btn" onclick="handleRelaxClick('${identifier}')">😌 Relax</button></div>`;
+    const activeElsewhere = getActiveRestForCollection(currentAddress, config.slug, identifier);
+    if (activeElsewhere) {
+      return `<div class="relax-widget"><div class="relax-status mono">Hai già #${activeElsewhere.identifier} a riposo in questa collezione. Un solo NFT per collezione alla volta.</div></div>`;
+    }
+    return `<div class="relax-widget"><button class="relax-btn" onclick="handleRelaxClick('${groupKey}', '${identifier}')">😌 Relax</button></div>`;
   }
 
   const pct = Math.round(state.progressPercent);
@@ -2937,32 +2978,47 @@ function relaxWidgetHtml(address, collectionSlug, identifier) {
     <div class="relax-widget">
       <div class="relax-bar-track"><div class="relax-bar-fill" style="width:${pct}%;"></div></div>
       <div class="relax-status mono">${state.isMaxed ? "Livello massimo raggiunto ✨" : `Livello ${state.currentLevel}/${state.maxLevel} · ${daysLeft}gg al prossimo`}</div>
-      ${state.currentLevel > 0 ? `<button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${identifier}', ${state.currentLevel})">⬇️ Scarica (Liv. ${state.currentLevel})</button>` : ""}
+      ${state.currentLevel > 0 ? `<button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${groupKey}', '${identifier}', ${state.currentLevel})">⬇️ Scarica (Liv. ${state.currentLevel})</button>` : ""}
     </div>`;
 }
 
-function refreshRelaxWidget(identifier) {
-  const el = document.getElementById(`relax-widget-${identifier}`);
-  if (el) el.innerHTML = relaxWidgetHtml(currentAddress, RELAX_COLLECTION_SLUG, identifier);
+function refreshRelaxWidget(groupKey, identifier) {
+  const el = document.getElementById(`relax-widget-${groupKey}-${identifier}`);
+  if (el) el.innerHTML = relaxWidgetHtml(groupKey, identifier);
 }
 
-async function handleRelaxClick(identifier) {
+// Ri-renderizza tutti i widget della collezione (usato dopo aver avviato un riposo,
+// per bloccare subito il pulsante sugli altri NFT della stessa collezione)
+function refreshAllRelaxWidgetsForCollection(groupKey) {
+  const items = RELAX_ITEMS_BY_ID[groupKey] || {};
+  Object.keys(items).forEach((id) => refreshRelaxWidget(groupKey, id));
+}
+
+async function handleRelaxClick(groupKey, identifier) {
+  const config = RELAX_COLLECTIONS[groupKey];
   if (!currentAddress) { alert("Connetti il wallet prima."); return; }
-  const item = RELAX_ITEMS_BY_ID[String(identifier)];
+  const item = (RELAX_ITEMS_BY_ID[groupKey] || {})[String(identifier)];
   if (!item) { alert("NFT non trovato tra quelli posseduti."); return; }
 
-  const btn = document.querySelector(`#relax-widget-${identifier} .relax-btn`);
-  if (btn) { btn.disabled = true; btn.textContent = "Verifico..."; }
-
-  const listed = await isNftListedForSale(RELAX_GROUP_CHAIN, item.contract, identifier);
-  if (listed) {
-    alert("Questo NFT è attualmente in vendita: rimuovi l'inserzione per poterlo mettere a riposo.");
-    refreshRelaxWidget(identifier);
+  const activeElsewhere = getActiveRestForCollection(currentAddress, config.slug, identifier);
+  if (activeElsewhere) {
+    alert(`Hai già #${activeElsewhere.identifier} a riposo in questa collezione. Un solo NFT per collezione alla volta.`);
+    refreshRelaxWidget(groupKey, identifier);
     return;
   }
 
-  startRest(currentAddress, identifier);
-  refreshRelaxWidget(identifier);
+  const btn = document.querySelector(`#relax-widget-${groupKey}-${identifier} .relax-btn`);
+  if (btn) { btn.disabled = true; btn.textContent = "Verifico..."; }
+
+  const listed = await isNftListedForSale(getRelaxChain(groupKey), item.contract, identifier);
+  if (listed) {
+    alert("Questo NFT è attualmente in vendita: rimuovi l'inserzione per poterlo mettere a riposo.");
+    refreshRelaxWidget(groupKey, identifier);
+    return;
+  }
+
+  startRest(currentAddress, config.slug, identifier);
+  refreshAllRelaxWidgetsForCollection(groupKey);
 }
 
 function loadImage(src) {
@@ -2975,13 +3031,14 @@ function loadImage(src) {
   });
 }
 
-async function composeRelaxImage(identifier, level, traits) {
-  const layerOrder = COLLECTION_LAYER_ORDER[RELAX_COLLECTION_SLUG];
+async function composeRelaxImage(groupKey, identifier, level, traits) {
+  const config = RELAX_COLLECTIONS[groupKey];
+  const layerOrder = config.layerOrder;
   const canvas = document.createElement("canvas");
   canvas.width = 1000; canvas.height = 1000;
   const ctx = canvas.getContext("2d");
 
-  const bgSrc = `${RELAX_ASSET_BASE}/backgrounds/${RELAX_COLLECTION_SLUG}/level-${level}.png`;
+  const bgSrc = `${RELAX_ASSET_BASE}/backgrounds/${config.slug}/level-${level}.png`;
   const bgImg = await loadImage(bgSrc);
   ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
 
@@ -2991,7 +3048,7 @@ async function composeRelaxImage(identifier, level, traits) {
   for (const layerType of layerOrder) {
     const value = traitMap[layerType];
     if (!value) continue;
-    const layerSrc = `${RELAX_ASSET_BASE}/layers/${RELAX_COLLECTION_SLUG}/${layerType}/${value}.png`;
+    const layerSrc = `${RELAX_ASSET_BASE}/layers/${config.slug}/${layerType}/${value}.png`;
     try {
       const layerImg = await loadImage(layerSrc);
       ctx.drawImage(layerImg, 0, 0, canvas.width, canvas.height);
@@ -3003,14 +3060,14 @@ async function composeRelaxImage(identifier, level, traits) {
   return canvas;
 }
 
-async function handleDownloadRelaxImage(identifier, level) {
-  const item = RELAX_ITEMS_BY_ID[String(identifier)];
+async function handleDownloadRelaxImage(groupKey, identifier, level) {
+  const item = (RELAX_ITEMS_BY_ID[groupKey] || {})[String(identifier)];
   if (!item) { alert("Dati NFT non disponibili per la ricomposizione."); return; }
 
   try {
-    const canvas = await composeRelaxImage(identifier, level, item.traits);
+    const canvas = await composeRelaxImage(groupKey, identifier, level, item.traits);
     const link = document.createElement("a");
-    link.download = `summer-vibes-${identifier}-relax-level-${level}.png`;
+    link.download = `${groupKey}-${identifier}-relax-level-${level}.png`;
     link.href = canvas.toDataURL("image/png");
     link.click();
   } catch (e) {
