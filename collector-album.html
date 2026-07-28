@@ -116,6 +116,22 @@
   .relax-caption-panel { background: var(--paper); max-width: 420px; width: 100%; padding: 20px; max-height: 90vh; overflow-y: auto; }
   .relax-caption-title { font-family: 'Bangers', cursive; font-size: 26px; margin: 0 0 12px; }
   .relax-caption-preview { width: 100%; border: 3px solid var(--ink); border-radius: 10px; margin-bottom: 14px; display: block; background: var(--grey); }
+  .relax-gallery-empty { text-align: center; padding: 40px 20px; color: #6b6b70; }
+  .relax-gallery-collection { background: var(--paper); border: 3px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow-hard-sm); padding: 16px; margin-bottom: 18px; }
+  .relax-gallery-collection-title { font-weight: 700; margin-bottom: 4px; }
+  .relax-gallery-collection-status { font-size: 12px; color: #6b6b70; margin-bottom: 12px; }
+  .relax-level-boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+  .relax-level-box { border: 3px solid var(--ink); border-radius: 10px; padding: 10px; text-align: center; background: var(--grey); opacity: 0.5; }
+  .relax-level-box.unlocked { opacity: 1; cursor: pointer; }
+  .relax-level-box-num { font-weight: 700; font-size: 13px; }
+  .relax-level-box-label { font-size: 12px; margin-top: 2px; }
+  .relax-level-box-lock { font-size: 16px; margin-top: 4px; }
+  .relax-caption-levels { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .relax-caption-level-btn {
+    font-family: 'Work Sans', sans-serif; font-size: 12px; font-weight: 700; padding: 8px 12px;
+    border: 2px solid var(--ink); border-radius: 10px; background: var(--paper); box-shadow: var(--shadow-hard-sm);
+  }
+  .relax-caption-level-btn.active { background: var(--pink); color: var(--paper); }
   .relax-caption-styles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
   .relax-caption-style-btn {
     font-family: 'Work Sans', sans-serif; font-size: 12px; font-weight: 700; padding: 8px 12px;
@@ -135,7 +151,7 @@
   .relax-caption-actions { display: flex; flex-direction: column; gap: 10px; }
   .relax-caption-actions button { width: 100%; }
   .relax-caption-close { background: none; border: none; box-shadow: none; text-decoration: underline; font-size: 13px; padding: 4px; cursor: pointer; }
-  .relax-widget { margin-top: 10px; padding-top: 10px; border-top: 2px dashed var(--ink); display: flex; flex-direction: column; gap: 6px; }
+  .relax-widget { margin-top: 10px; padding-top: 10px; border-top: 3px solid var(--ink); display: flex; flex-direction: column; gap: 6px; }
   .relax-bar-track { height: 10px; background: var(--paper); border: 2px solid var(--ink); border-radius: 999px; overflow: hidden; }
   .relax-bar-fill { height: 100%; background: var(--pink); transition: width 0.3s ease; }
   .relax-status { font-size: 11px; color: #6b6b70; }
@@ -340,6 +356,7 @@
       <button type="button" id="statsBtn" class="secondary">📊 Collector Profile</button>
       <button type="button" id="airdropBtn" class="secondary">🎁 Airdrop</button>
       <button type="button" id="badgeGuideBtn" class="secondary">📖 Badge Guide</button>
+      <button type="button" id="relaxGalleryBtn" class="secondary">🎨 Create Your Custom NFT</button>
       <button type="button" id="leaderboardBtn" class="secondary">👑 Leaderboard</button>
     </div>
 
@@ -366,6 +383,7 @@
   <div id="statsPage" class="trait-page"></div>
   <div id="leaderboardPage" class="trait-page"></div>
   <div id="badgeGuidePage" class="trait-page"></div>
+  <div id="relaxGalleryPage" class="trait-page"></div>
   <div id="airdropPage" class="trait-page"></div>
 
 </div>
@@ -711,6 +729,8 @@ const leaderboardBtn = document.getElementById("leaderboardBtn");
 const statsPage = document.getElementById("statsPage");
 const leaderboardPage = document.getElementById("leaderboardPage");
 const badgeGuidePage = document.getElementById("badgeGuidePage");
+const relaxGalleryBtn = document.getElementById("relaxGalleryBtn");
+const relaxGalleryPage = document.getElementById("relaxGalleryPage");
 const airdropPage = document.getElementById("airdropPage");
 
 let lastTraitsMeta = null;
@@ -732,6 +752,7 @@ connectMobileBtn.addEventListener("click", connectWalletMobile);
 statsBtn.addEventListener("click", showStatsPage);
 airdropBtn.addEventListener("click", showAirdropPage);
 badgeGuideBtn.addEventListener("click", showBadgeGuidePage);
+relaxGalleryBtn.addEventListener("click", showRelaxGalleryPage);
 leaderboardBtn.addEventListener("click", showLeaderboardPage);
 document.getElementById("badgeUnlockCloseBtn").addEventListener("click", hideBadgeUnlockPopup);
 document.getElementById("badgeUnlockShareBtn").addEventListener("click", shareUnlockedBadgesOnX);
@@ -2764,11 +2785,98 @@ function buildRelaxGuideHtml() {
     guideCardHtml("😌", "Put an NFT to rest", "On any owned NFT (not listed for sale) you can click \"Relax\" to put it to rest. You can rest one NFT per collection at a time."),
     guideCardHtml("⏳", "Levels and wait time", "The longer you leave the NFT resting, the more levels you unlock: time is cumulative from the moment you clicked \"Relax\" and never resets."),
     guideCardHtml("🎨", "A new background per level", "Every level you reach unlocks a new background for your character."),
-    guideCardHtml("⬇️", "Download your image", "Once a level is unlocked, you can download an image of your character on the new background — you can also add a caption or a small decorative creature before downloading."),
+    guideCardHtml("⬇️", "Download your image", "Once a level is unlocked, you can download an image of your character on the new background — if you've unlocked more than one level, pick which one to use. You can also add a caption or a small decorative creature before downloading."),
     guideCardHtml("🔓", "Slot frees up", "Once the resting NFT reaches the max level, the slot frees up: you can put another NFT from the same collection to rest."),
     guideCardHtml("↩️", "Changed your mind?", "You can remove an NFT from rest at any time by clicking \"Remove from rest\" — note that current progress will be lost."),
+    guideCardHtml("🖼️", "Create Your Custom NFT", "Head to \"🎨 Create Your Custom NFT\" anytime to see, per collection, which levels are unlocked and what each one reveals (e.g. \"Background\"). Note: this doesn't mint anything — it's just an image you can download and use for fun or on social media."),
+    guideCardHtml("🎨", "Color-coded levels", "Each level has its own color: grey = no level yet, blue = level 1, purple = level 2, pink = level 3, gold = level 4 (max). You'll see this color on the resting NFT's card and in the Relax Gallery."),
   ];
   return `<div class="guide-list">${cards.join("")}</div>`;
+}
+
+function getAllRestEntriesForCollection(address, groupKey) {
+  const config = RELAX_COLLECTIONS[groupKey];
+  const prefix = `relax:${address.toLowerCase()}:${config.slug}:`;
+  const entries = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    const identifier = key.slice(prefix.length);
+    try {
+      const state = getRestState(address, config.slug, identifier);
+      if (state) entries.push({ identifier, state });
+    } catch (e) {}
+  }
+  return entries;
+}
+
+function relaxLevelBoxesHtml(groupKey, currentLevel, downloadIdentifier) {
+  const boxes = REST_LEVEL_THRESHOLDS_DAYS.map((_, i) => i + 1).map((level) => {
+    const unlocked = currentLevel >= level;
+    const color = relaxLevelColor(level);
+    const label = relaxLevelUnlocksLabel(groupKey, level);
+    const style = unlocked ? `border-color:${color}; background:${color};` : "";
+    const onclick = unlocked && downloadIdentifier ? `onclick="openGalleryItemDownload('${groupKey}', '${downloadIdentifier}', ${level})"` : "";
+    return `
+      <div class="relax-level-box${unlocked ? " unlocked" : ""}" style="${style}" ${onclick}>
+        <div class="relax-level-box-num">Level ${level}</div>
+        <div class="relax-level-box-label">${escapeHtml(label)}</div>
+        ${unlocked ? "" : '<div class="relax-level-box-lock">🔒</div>'}
+      </div>`;
+  }).join("");
+  return `<div class="relax-level-boxes">${boxes}</div>`;
+}
+
+function relaxGalleryCollectionHtml(groupKey, label, currentLevel, downloadIdentifier) {
+  const statusText = currentLevel >= REST_LEVEL_THRESHOLDS_DAYS.length
+    ? "Max level reached ✨"
+    : currentLevel > 0
+      ? `Level ${currentLevel}/${REST_LEVEL_THRESHOLDS_DAYS.length} unlocked`
+      : "No level unlocked yet — put an NFT to rest to start.";
+  return `
+    <div class="relax-gallery-collection">
+      <div class="relax-gallery-collection-title">${escapeHtml(label)}</div>
+      <div class="relax-gallery-collection-status mono">${statusText}</div>
+      ${relaxLevelBoxesHtml(groupKey, currentLevel, downloadIdentifier)}
+    </div>`;
+}
+
+async function openGalleryItemDownload(groupKey, identifier, level) {
+  await handleDownloadRelaxImage(groupKey, identifier, level);
+}
+
+function showRelaxGalleryPage() {
+  if (!currentAddress) {
+    relaxGalleryPage.innerHTML = `
+      <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
+      <div class="section-title">🎨 Create Your Custom NFT <div class="bar"></div></div>
+      <div class="mono" style="font-size:12px; color:#6b6b70; margin:-14px 0 20px;">This doesn't mint anything — it's just an image you can download and use for fun or on social media.</div>
+      <div class="relax-gallery-empty">Connect your wallet to see your unlocked levels here.</div>
+      <span class="back-link bottom" onclick="hideTraitPages()">&larr; Back to album</span>`;
+  } else {
+    const sections = Object.keys(RELAX_COLLECTIONS).filter((k) => RELAX_COLLECTIONS[k].enabled).map((groupKey) => {
+      const group = ALBUM_GROUPS.find((g) => g.key === groupKey);
+      const label = group ? group.label : groupKey;
+      const entries = getAllRestEntriesForCollection(currentAddress, groupKey);
+      if (entries.length === 0) return relaxGalleryCollectionHtml(groupKey, label, 0, null);
+      const active = entries.find((e) => !e.state.isMaxed);
+      const chosen = active || entries.slice().sort((a, b) => b.state.startedAt - a.state.startedAt)[0];
+      return relaxGalleryCollectionHtml(groupKey, label, chosen.state.currentLevel, chosen.identifier);
+    }).join("");
+
+    relaxGalleryPage.innerHTML = `
+      <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
+      <div class="section-title">🎨 Create Your Custom NFT <div class="bar"></div></div>
+      <div class="mono" style="font-size:12px; color:#6b6b70; margin:-14px 0 20px;">This doesn't mint anything — it's just an image you can download and use for fun or on social media.</div>
+      <div class="mono" style="font-size:13px; line-height:1.6; margin-bottom:20px;">These are the levels unlockable in each collection. Only one NFT can rest at a time per collection, but any NFT that reaches a given level while resting can be customized at that level — over time, different NFTs from the same collection can each unlock and use these same levels, one at a time. Check the colored border on an NFT's card to see its level: <strong>grey</strong> = none, <strong>blue</strong> = level 1, <strong>purple</strong> = level 2, <strong>pink</strong> = level 3, <strong>gold</strong> = level 4 (max).</div>
+      ${sections}
+      <span class="back-link bottom" onclick="hideTraitPages()">&larr; Back to album</span>`;
+  }
+
+  mainView.style.display = "none";
+  document.querySelectorAll(".trait-page").forEach((p) => p.classList.remove("active"));
+  relaxGalleryPage.classList.add("active");
+  window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
 }
 
 function showBadgeGuidePage() {
@@ -2781,7 +2889,8 @@ function showBadgeGuidePage() {
     <div class="guide-list">${GENERAL_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div>
     <div class="section-title" style="margin-top:32px; font-size:20px;">Collection Badges <div class="bar"></div></div>
     <div class="guide-list">${COLLECTION_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div>
-    <div class="section-title" style="margin-top:32px; font-size:20px;">😌 Relax System <div class="bar"></div></div>
+    <div class="section-title" style="margin-top:32px; font-size:20px;">🎨 Create Your Custom NFT <div class="bar"></div></div>
+    <div class="mono" style="font-size:12px; color:#6b6b70; margin-top:-8px;">This doesn't mint anything — it's just an image you can download and use for fun or on social media.</div>
     ${buildRelaxGuideHtml()}
     <div class="mono" style="margin-top:28px; color:#6b6b70; font-size:13px;">Psst — not every badge is listed here. Some are secret and only reveal themselves once you've earned them...</div>
     <span class="back-link bottom" onclick="hideTraitPages()">&larr; Back to album</span>
@@ -2919,6 +3028,20 @@ const REST_LEVEL_THRESHOLDS_DAYS = REST_LEVEL_DURATIONS_DAYS.reduce((acc, d) => 
 
 const RELAX_ASSET_BASE = "assets/relax";
 
+const RELAX_LEVEL_COLORS = ["var(--grey)", "var(--blue)", "var(--purple)", "var(--pink)", "var(--yellow)"];
+function relaxLevelColor(level) {
+  return RELAX_LEVEL_COLORS[Math.max(0, Math.min(level, RELAX_LEVEL_COLORS.length - 1))];
+}
+
+// Cosa sblocca ogni livello: sempre lo sfondo, più eventuali extra futuri con etichetta
+// (es. RELAX_LEVEL_EXTRAS.men[2] = [{ path: "...", label: "Eyes" }])
+function relaxLevelUnlocksLabel(groupKey, level) {
+  const labels = ["Background"];
+  const extras = (RELAX_LEVEL_EXTRAS[groupKey] && RELAX_LEVEL_EXTRAS[groupKey][level]) || [];
+  extras.forEach((e) => { if (e.label) labels.push(e.label); });
+  return labels.join(" + ");
+}
+
 function slugifyRelax(str) {
   return String(str).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
@@ -3039,10 +3162,11 @@ function relaxWidgetHtml(groupKey, identifier) {
 
   const pct = Math.round(state.progressPercent);
   const daysLeft = state.nextThresholdDays != null ? Math.max(0, state.nextThresholdDays - state.elapsedDays).toFixed(1) : 0;
+  const levelColor = relaxLevelColor(state.currentLevel);
 
   return `
-    <div class="relax-widget">
-      <div class="relax-bar-track"><div class="relax-bar-fill" style="width:${pct}%;"></div></div>
+    <div class="relax-widget" style="border-top-color: ${levelColor};">
+      <div class="relax-bar-track"><div class="relax-bar-fill" style="width:${pct}%; background:${levelColor};"></div></div>
       <div class="relax-status mono">${state.isMaxed ? "Max level reached ✨" : `Level ${state.currentLevel}/${state.maxLevel} · ${daysLeft}d to next`}</div>
       ${state.currentLevel > 0 ? `<button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${groupKey}', '${identifier}', ${state.currentLevel})">⬇️ Download (Lvl ${state.currentLevel})</button>` : ""}
       <button type="button" class="relax-caption-close" style="align-self:center;" onclick="cancelRest('${groupKey}', '${identifier}')">Remove from rest</button>
@@ -3089,6 +3213,11 @@ async function handleRelaxClick(groupKey, identifier) {
   refreshAllRelaxWidgetsForCollection(groupKey);
 }
 
+// Sblocchi extra per livello, oltre al cambio di sfondo — es. in futuro un accessorio
+// esclusivo sbloccato al livello 2. Vuoto per ora: aggiungi qui quando servirà, es.
+// { men: { 2: [{ path: "assets/relax/extras/metamusex-men-official/level-2-wings.png" }] } }
+const RELAX_LEVEL_EXTRAS = {};
+
 function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -3115,11 +3244,11 @@ function relaxFilenameCandidates(rawValue) {
   return Array.from(finalVariants);
 }
 
-async function composeRelaxImage(groupKey, identifier, level, traits) {
+async function composeRelaxImage(groupKey, identifier, level, traits, size) {
   const config = RELAX_COLLECTIONS[groupKey];
   const layerOrder = config.layerOrder;
   const canvas = document.createElement("canvas");
-  canvas.width = 1000; canvas.height = 1000;
+  canvas.width = size || 1000; canvas.height = size || 1000;
   const ctx = canvas.getContext("2d");
 
   const bgSrc = `${RELAX_ASSET_BASE}/backgrounds/${config.assetFolder}/level-${level}.png`;
@@ -3146,6 +3275,16 @@ async function composeRelaxImage(groupKey, identifier, level, traits) {
     if (!loaded) console.warn(`Layer non trovato per "${layerType}" (valore: "${value}"): nessuna variante di nome file ha funzionato.`);
   }
 
+  const extras = (RELAX_LEVEL_EXTRAS[groupKey] && RELAX_LEVEL_EXTRAS[groupKey][level]) || [];
+  for (const extra of extras) {
+    try {
+      const extraImg = await loadImage(extra.path);
+      ctx.drawImage(extraImg, 0, 0, canvas.width, canvas.height);
+    } catch (e) {
+      console.warn(`Extra del livello ${level} non trovato: ${extra.path}`);
+    }
+  }
+
   return canvas;
 }
 
@@ -3163,11 +3302,11 @@ const RELAX_CAPTION_STYLES = [
   { key: "flower", label: "🌸 Flower" },
   { key: "heart", label: "💖 Heart" },
   { key: "star", label: "⭐ Star" },
-  { key: "vampire", label: "🧛 Vampire" },
+  { key: "rocket", label: "🚀 Rocket" },
 ];
-const RELAX_CAPTION_DEFAULT_LABELS = { bird: "CHIRP CHIRP", dino: "RAWR", vampire: "MWAHAHA" };
+const RELAX_CAPTION_DEFAULT_LABELS = { bird: "CHIRP CHIRP", dino: "RAWR", rocket: "TO THE MOON" };
 const RELAX_CAPTION_DECORATION_ONLY_STYLES = ["flower", "heart", "star"];
-const RELAX_CAPTION_CREATURE_STYLES = ["bird", "dino", "vampire"];
+const RELAX_CAPTION_CREATURE_STYLES = ["bird", "dino", "rocket"];
 let relaxCaptionState = null; // { groupKey, identifier, level, baseCanvas, text, style }
 
 function measureFittedFontSize(ctx, label, maxWidth, startSize, minSize) {
@@ -3273,7 +3412,7 @@ function drawStickerCaption(ctx, canvas, label, maxWidth, startSize) {
 
 function drawRibbonCaption(ctx, canvas, label, maxWidth, startSize) {
   const ribbonWidth = canvas.width * 1.6;
-  const { fontSize } = measureFittedFontSize(ctx, label, ribbonWidth * 0.55, Math.min(startSize, Math.round(canvas.width * 0.075)));
+  const { fontSize } = measureFittedFontSize(ctx, label, ribbonWidth * 0.55, Math.min(startSize, Math.round(canvas.width * 0.12)));
   const ribbonHeight = fontSize + 34;
   const lineWidth = Math.max(4, Math.round(canvas.width * 0.006));
 
@@ -3318,8 +3457,8 @@ function drawSmallSpeechBubble(ctx, label, anchorX, anchorY, direction, fontSize
 }
 
 function drawBirdCaption(ctx, canvas, label) {
-  const scale = (canvas.width / 1000) * 2;
-  const x = canvas.width * 0.72, y = canvas.height * 0.16;
+  const scale = (canvas.width / 1000) * 4;
+  const x = canvas.width * 0.85, y = canvas.height * 0.17;
 
   ctx.save();
   ctx.strokeStyle = "#1B1B1F"; ctx.lineWidth = 3 * scale; ctx.lineCap = "round";
@@ -3351,13 +3490,13 @@ function drawBirdCaption(ctx, canvas, label) {
   ctx.beginPath(); ctx.arc(13, -6, 3, 0, Math.PI * 2); ctx.fillStyle = "#1B1B1F"; ctx.fill();
   ctx.restore();
 
-  const fontSize = Math.max(18, Math.round(canvas.width * 0.036));
-  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.bird, x - 44 * scale, y - 4 * scale, "left", fontSize);
+  const fontSize = Math.max(22, Math.round(canvas.width * 0.05));
+  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.bird, x - 60 * scale, y - 6 * scale, "left", fontSize);
 }
 
 function drawDinoCaption(ctx, canvas, label) {
-  const scale = (canvas.width / 1000) * 2.6;
-  const x = canvas.width * 0.2, y = canvas.height * 0.995;
+  const scale = (canvas.width / 1000) * 5.2;
+  const x = canvas.width * 0.22, y = canvas.height * 0.995;
 
   ctx.save();
   ctx.translate(x, y); ctx.scale(scale, scale);
@@ -3389,8 +3528,8 @@ function drawDinoCaption(ctx, canvas, label) {
   ctx.strokeStyle = "#1B1B1F"; ctx.lineWidth = 3; ctx.stroke();
   ctx.restore();
 
-  const fontSize = Math.max(18, Math.round(canvas.width * 0.036));
-  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.dino, x + 38 * scale, y - 70 * scale, "right", fontSize);
+  const fontSize = Math.max(22, Math.round(canvas.width * 0.05));
+  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.dino, x + 58 * scale, y - 90 * scale, "right", fontSize);
 }
 
 function drawFlowerShape(ctx, x, y, scale) {
@@ -3410,9 +3549,9 @@ function drawFlowerShape(ctx, x, y, scale) {
 }
 
 function drawFlowerCaption(ctx, canvas) {
-  const scale = (canvas.width / 1000) * 1.7;
-  drawFlowerShape(ctx, canvas.width * 0.14, canvas.height * 0.13, scale);
-  drawFlowerShape(ctx, canvas.width * 0.25, canvas.height * 0.2, scale * 0.55);
+  const scale = (canvas.width / 1000) * 3.4;
+  drawFlowerShape(ctx, canvas.width * 0.16, canvas.height * 0.15, scale);
+  drawFlowerShape(ctx, canvas.width * 0.32, canvas.height * 0.25, scale * 0.55);
 }
 
 function drawHeartShape(ctx, x, y, size) {
@@ -3429,10 +3568,10 @@ function drawHeartShape(ctx, x, y, size) {
 }
 
 function drawHeartCaption(ctx, canvas) {
-  const scale = (canvas.width / 1000) * 1.6;
-  drawHeartShape(ctx, canvas.width * 0.86, canvas.height * 0.13, scale);
-  drawHeartShape(ctx, canvas.width * 0.78, canvas.height * 0.23, scale * 0.6);
-  drawHeartShape(ctx, canvas.width * 0.9, canvas.height * 0.25, scale * 0.4);
+  const scale = (canvas.width / 1000) * 3.2;
+  drawHeartShape(ctx, canvas.width * 0.88, canvas.height * 0.15, scale);
+  drawHeartShape(ctx, canvas.width * 0.74, canvas.height * 0.28, scale * 0.6);
+  drawHeartShape(ctx, canvas.width * 0.94, canvas.height * 0.3, scale * 0.4);
 }
 
 function drawSparkle(ctx, x, y, size) {
@@ -3451,46 +3590,47 @@ function drawSparkle(ctx, x, y, size) {
 }
 
 function drawStarCaption(ctx, canvas) {
-  const scale = (canvas.width / 1000) * 1.8;
-  drawSparkle(ctx, canvas.width * 0.15, canvas.height * 0.87, scale);
-  drawSparkle(ctx, canvas.width * 0.07, canvas.height * 0.72, scale * 0.5);
-  drawSparkle(ctx, canvas.width * 0.23, canvas.height * 0.94, scale * 0.4);
+  const scale = (canvas.width / 1000) * 3.6;
+  drawSparkle(ctx, canvas.width * 0.17, canvas.height * 0.89, scale);
+  drawSparkle(ctx, canvas.width * 0.05, canvas.height * 0.75, scale * 0.5);
+  drawSparkle(ctx, canvas.width * 0.28, canvas.height * 0.96, scale * 0.4);
 }
 
-function drawVampireCaption(ctx, canvas, label) {
-  const scale = (canvas.width / 1000) * 2;
-  const x = canvas.width * 0.2, y = canvas.height * 0.16;
+function drawRocketCaption(ctx, canvas, label) {
+  const scale = (canvas.width / 1000) * 4;
+  const x = canvas.width * 0.78, y = canvas.height * 0.78;
 
   ctx.save();
-  ctx.translate(x, y); ctx.scale(scale, scale);
+  ctx.translate(x, y); ctx.rotate(-0.7); ctx.scale(scale, scale);
   ctx.lineWidth = 4; ctx.strokeStyle = "#1B1B1F";
 
   ctx.beginPath();
-  ctx.moveTo(0, 0); ctx.quadraticCurveTo(-20, -10, -38, 4);
-  ctx.quadraticCurveTo(-26, 4, -22, 14); ctx.quadraticCurveTo(-14, 8, 0, 10);
+  ctx.moveTo(0, -34); ctx.quadraticCurveTo(14, -14, 14, 8);
+  ctx.lineTo(-14, 8); ctx.quadraticCurveTo(-14, -14, 0, -34);
   ctx.closePath();
-  ctx.fillStyle = "#3C3489"; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#F5C4B3"; ctx.fill(); ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(0, 0); ctx.quadraticCurveTo(20, -10, 38, 4);
-  ctx.quadraticCurveTo(26, 4, 22, 14); ctx.quadraticCurveTo(14, 8, 0, 10);
-  ctx.closePath();
-  ctx.fillStyle = "#3C3489"; ctx.fill(); ctx.stroke();
+  ctx.moveTo(-14, 2); ctx.lineTo(-28, 20); ctx.lineTo(-14, 16); ctx.closePath();
+  ctx.moveTo(14, 2); ctx.lineTo(28, 20); ctx.lineTo(14, 16); ctx.closePath();
+  ctx.fillStyle = "#D85A30"; ctx.fill(); ctx.stroke();
 
-  ctx.beginPath(); ctx.ellipse(0, 4, 10, 12, 0, 0, Math.PI * 2);
-  ctx.fillStyle = "#26215C"; ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, -10, 7, 0, Math.PI * 2);
+  ctx.fillStyle = "#85B7EB"; ctx.fill(); ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(-8, -6); ctx.lineTo(-4, -16); ctx.lineTo(-2, -4); ctx.closePath();
-  ctx.moveTo(8, -6); ctx.lineTo(4, -16); ctx.lineTo(2, -4); ctx.closePath();
-  ctx.fillStyle = "#26215C"; ctx.fill(); ctx.stroke();
+  ctx.moveTo(-9, 8); ctx.lineTo(9, 8); ctx.lineTo(4, 24); ctx.lineTo(-4, 24); ctx.closePath();
+  ctx.fillStyle = "#FFC93C"; ctx.fill(); ctx.stroke();
 
-  ctx.beginPath(); ctx.arc(-4, -2, 2, 0, Math.PI * 2); ctx.arc(4, -2, 2, 0, Math.PI * 2);
-  ctx.fillStyle = "#E24B4A"; ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-6, 24); ctx.quadraticCurveTo(0, 46, 6, 24);
+  ctx.quadraticCurveTo(0, 36, -6, 24);
+  ctx.closePath();
+  ctx.fillStyle = "#F0997B"; ctx.fill(); ctx.lineWidth = 2; ctx.stroke();
   ctx.restore();
 
-  const fontSize = Math.max(18, Math.round(canvas.width * 0.036));
-  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.vampire, x + 34 * scale, y + 8 * scale, "right", fontSize);
+  const fontSize = Math.max(22, Math.round(canvas.width * 0.05));
+  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.rocket, x - 46 * scale, y - 30 * scale, "left", fontSize);
 }
 
 async function drawCaptionOnCanvas(sourceCanvas, text, style) {
@@ -3509,7 +3649,7 @@ async function drawCaptionOnCanvas(sourceCanvas, text, style) {
   try { await document.fonts.load('64px "Bangers"'); } catch (e) {}
 
   const maxWidth = canvas.width * 0.82;
-  const startSize = Math.round(canvas.width * 0.09);
+  const startSize = Math.round(canvas.width * 0.16);
 
   switch (style) {
     case "balloon": drawBalloonCaption(ctx, canvas, label, maxWidth, startSize); break;
@@ -3520,7 +3660,7 @@ async function drawCaptionOnCanvas(sourceCanvas, text, style) {
     case "flower": drawFlowerCaption(ctx, canvas); break;
     case "heart": drawHeartCaption(ctx, canvas); break;
     case "star": drawStarCaption(ctx, canvas); break;
-    case "vampire": drawVampireCaption(ctx, canvas, label); break;
+    case "rocket": drawRocketCaption(ctx, canvas, label); break;
     default: drawSignCaption(ctx, canvas, label, maxWidth, startSize);
   }
 
@@ -3539,6 +3679,17 @@ async function updateRelaxCaptionPreview() {
   if (!preview) return;
   const composed = await drawCaptionOnCanvas(relaxCaptionState.baseCanvas, relaxCaptionState.text, relaxCaptionState.style);
   preview.src = composed.toDataURL("image/png");
+}
+
+async function setRelaxCaptionLevel(level) {
+  if (!relaxCaptionState) return;
+  relaxCaptionState.level = level;
+  const item = (RELAX_ITEMS_BY_ID[relaxCaptionState.groupKey] || {})[String(relaxCaptionState.identifier)];
+  relaxCaptionState.baseCanvas = await composeRelaxImage(relaxCaptionState.groupKey, relaxCaptionState.identifier, level, item.traits);
+  document.querySelectorAll(".relax-caption-level-btn").forEach((btn) => {
+    btn.classList.toggle("active", Number(btn.dataset.level) === level);
+  });
+  updateRelaxCaptionPreview();
 }
 
 function setRelaxCaptionText(text) {
@@ -3576,8 +3727,12 @@ function triggerCanvasDownload(canvas, groupKey, identifier, level) {
   link.click();
 }
 
-function openRelaxCaptionModal(groupKey, identifier, level, baseCanvas) {
-  relaxCaptionState = { groupKey, identifier, level, baseCanvas, text: "", style: "sign" };
+function openRelaxCaptionModal(groupKey, identifier, level, maxUnlocked, baseCanvas) {
+  relaxCaptionState = { groupKey, identifier, level, maxUnlocked, baseCanvas, text: "", style: "sign" };
+
+  const levelButtons = Array.from({ length: maxUnlocked }, (_, i) => i + 1)
+    .map((l) => `<button type="button" class="relax-caption-level-btn${l === level ? " active" : ""}" data-level="${l}" onclick="setRelaxCaptionLevel(${l})">Level ${l}</button>`)
+    .join("");
 
   const overlay = document.createElement("div");
   overlay.className = "relax-caption-overlay";
@@ -3586,6 +3741,7 @@ function openRelaxCaptionModal(groupKey, identifier, level, baseCanvas) {
     <div class="relax-caption-panel">
       <div class="relax-caption-title">Add a caption?</div>
       <img class="relax-caption-preview" id="relax-caption-preview-canvas" alt="Preview" />
+      ${maxUnlocked > 1 ? `<div class="relax-caption-levels">${levelButtons}</div>` : ""}
       <div class="relax-caption-styles">
         ${RELAX_CAPTION_STYLES.map((s) => `<button type="button" class="relax-caption-style-btn${s.key === "sign" ? " active" : ""}" data-style="${s.key}" onclick="setRelaxCaptionStyle('${s.key}')">${s.label}</button>`).join("")}
       </div>
@@ -3604,12 +3760,16 @@ function openRelaxCaptionModal(groupKey, identifier, level, baseCanvas) {
 }
 
 async function handleDownloadRelaxImage(groupKey, identifier, level) {
+  const config = RELAX_COLLECTIONS[groupKey];
   const item = (RELAX_ITEMS_BY_ID[groupKey] || {})[String(identifier)];
   if (!item) { alert("NFT data not available to rebuild the image."); return; }
 
+  const state = getRestState(currentAddress, config.slug, identifier);
+  const maxUnlocked = state ? state.currentLevel : level;
+
   try {
     const canvas = await composeRelaxImage(groupKey, identifier, level, item.traits);
-    openRelaxCaptionModal(groupKey, identifier, level, canvas);
+    openRelaxCaptionModal(groupKey, identifier, level, maxUnlocked, canvas);
   } catch (e) {
     console.error(e);
     alert("Error generating the image. Check that all assets are uploaded correctly.");
