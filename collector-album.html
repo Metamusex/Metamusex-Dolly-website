@@ -2893,7 +2893,10 @@ const RELAX_ITEMS_BY_ID = {}; // { [groupKey]: { [identifier]: item } }, popolat
 
 // Soglie CUMULATIVE in giorni dall'inizio del riposo (non resettabili)
 // Livello 1: 3gg totali | Livello 2: 3+6=9gg | Livello 3: 9+20=29gg | Livello 4: 29+35=64gg
-const REST_LEVEL_DURATIONS_DAYS = [3, 6, 20, 35];
+// *** MODALITÀ TEST ATTIVA: 2 minuti per livello invece dei giorni reali ***
+// Per tornare alla versione reale, sostituisci la riga sotto con:
+// const REST_LEVEL_DURATIONS_DAYS = [3, 6, 20, 35];
+const REST_LEVEL_DURATIONS_DAYS = [2 / 1440, 2 / 1440, 2 / 1440, 2 / 1440]; // 2 min, 2 min, 2 min, 2 min
 const REST_LEVEL_THRESHOLDS_DAYS = REST_LEVEL_DURATIONS_DAYS.reduce((acc, d) => {
   const prev = acc.length ? acc[acc.length - 1] : 0;
   acc.push(prev + d);
