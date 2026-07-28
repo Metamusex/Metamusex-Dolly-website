@@ -2759,6 +2759,18 @@ function buildCollectorRankGuideHtml() {
   `;
 }
 
+function buildRelaxGuideHtml() {
+  const cards = [
+    guideCardHtml("😌", "Metti a riposo un NFT", "Su ogni NFT posseduto (non listato in vendita) puoi cliccare \"Relax\" per metterlo a riposo. Puoi tenerne a riposo uno per volta per ogni collezione."),
+    guideCardHtml("⏳", "Livelli e tempo di attesa", "Più a lungo lasci l'NFT a riposo, più livelli sblocchi: il tempo è cumulativo dal momento in cui hai premuto \"Relax\", non si resetta."),
+    guideCardHtml("🎨", "Nuovo sfondo ad ogni livello", "Ogni livello raggiunto sblocca un nuovo sfondo per il tuo personaggio."),
+    guideCardHtml("⬇️", "Scarica la tua immagine", "Una volta sbloccato un livello, puoi scaricare un'immagine con il tuo personaggio sul nuovo sfondo — puoi anche aggiungere una scritta o una piccola creatura decorativa prima di scaricarla."),
+    guideCardHtml("🔓", "Libera lo slot", "Una volta che l'NFT a riposo raggiunge il livello massimo, si libera lo slot: puoi mettere a riposo un altro NFT della stessa collezione."),
+    guideCardHtml("↩️", "Cambiato idea?", "Puoi togliere in qualsiasi momento un NFT dal riposo cliccando \"Togli dal riposo\" — attenzione, il progresso fatto fino a lì andrà perso."),
+  ];
+  return `<div class="guide-list">${cards.join("")}</div>`;
+}
+
 function showBadgeGuidePage() {
   badgeGuidePage.innerHTML = `
     <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
@@ -2769,6 +2781,8 @@ function showBadgeGuidePage() {
     <div class="guide-list">${GENERAL_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div>
     <div class="section-title" style="margin-top:32px; font-size:20px;">Collection Badges <div class="bar"></div></div>
     <div class="guide-list">${COLLECTION_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div>
+    <div class="section-title" style="margin-top:32px; font-size:20px;">😌 Relax System <div class="bar"></div></div>
+    ${buildRelaxGuideHtml()}
     <div class="mono" style="margin-top:28px; color:#6b6b70; font-size:13px;">Psst — not every badge is listed here. Some are secret and only reveal themselves once you've earned them...</div>
     <span class="back-link bottom" onclick="hideTraitPages()">&larr; Back to album</span>
   `;
@@ -2994,6 +3008,15 @@ async function isNftListedForSale(collectionSlug, identifier) {
   }
 }
 
+function cancelRest(groupKey, identifier) {
+  const config = RELAX_COLLECTIONS[groupKey];
+  if (!config || !currentAddress) return;
+  const sure = confirm("Vuoi togliere questo NFT dal riposo? Il progresso attuale andrà perso.");
+  if (!sure) return;
+  localStorage.removeItem(restStorageKey(currentAddress, config.slug, identifier));
+  refreshAllRelaxWidgetsForCollection(groupKey);
+}
+
 function relaxWidgetHtml(groupKey, identifier) {
   const config = RELAX_COLLECTIONS[groupKey];
   if (!config) return "";
@@ -3009,7 +3032,7 @@ function relaxWidgetHtml(groupKey, identifier) {
   if (!state) {
     const activeElsewhere = getActiveRestForCollection(currentAddress, config.slug, identifier);
     if (activeElsewhere) {
-      return `<div class="relax-widget"><div class="relax-status mono">Hai già #${activeElsewhere.identifier} a riposo in questa collezione. Un solo NFT per collezione alla volta.</div></div>`;
+      return `<div class="relax-widget"><button class="relax-btn" disabled style="opacity:0.4; cursor:not-allowed;">😌 Relax</button></div>`;
     }
     return `<div class="relax-widget"><button class="relax-btn" onclick="handleRelaxClick('${groupKey}', '${identifier}')">😌 Relax</button></div>`;
   }
@@ -3022,6 +3045,7 @@ function relaxWidgetHtml(groupKey, identifier) {
       <div class="relax-bar-track"><div class="relax-bar-fill" style="width:${pct}%;"></div></div>
       <div class="relax-status mono">${state.isMaxed ? "Livello massimo raggiunto ✨" : `Livello ${state.currentLevel}/${state.maxLevel} · ${daysLeft}gg al prossimo`}</div>
       ${state.currentLevel > 0 ? `<button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${groupKey}', '${identifier}', ${state.currentLevel})">⬇️ Scarica (Liv. ${state.currentLevel})</button>` : ""}
+      <button type="button" class="relax-caption-close" style="align-self:center;" onclick="cancelRest('${groupKey}', '${identifier}')">Togli dal riposo</button>
     </div>`;
 }
 
@@ -3087,12 +3111,12 @@ async function composeRelaxImage(groupKey, identifier, level, traits) {
   ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
 
   const traitMap = {};
-  (traits || []).forEach((t) => { traitMap[slugifyRelax(t.trait_type)] = slugifyRelax(t.value); });
+  (traits || []).forEach((t) => { traitMap[slugifyRelax(t.trait_type)] = t.value; });
 
   for (const layerType of layerOrder) {
     const value = traitMap[layerType];
     if (!value) continue;
-    const layerSrc = `${RELAX_ASSET_BASE}/layers/${config.assetFolder}/${layerType}/${value}.png`;
+    const layerSrc = `${RELAX_ASSET_BASE}/layers/${config.assetFolder}/${layerType}/${encodeURIComponent(value)}.png`;
     try {
       const layerImg = await loadImage(layerSrc);
       ctx.drawImage(layerImg, 0, 0, canvas.width, canvas.height);
@@ -3267,8 +3291,8 @@ function drawSmallSpeechBubble(ctx, label, anchorX, anchorY, direction, fontSize
 }
 
 function drawBirdCaption(ctx, canvas, label) {
-  const scale = canvas.width / 1000;
-  const x = canvas.width * 0.78, y = canvas.height * 0.13;
+  const scale = (canvas.width / 1000) * 2;
+  const x = canvas.width * 0.72, y = canvas.height * 0.16;
 
   ctx.save();
   ctx.strokeStyle = "#1B1B1F"; ctx.lineWidth = 3 * scale; ctx.lineCap = "round";
@@ -3300,13 +3324,13 @@ function drawBirdCaption(ctx, canvas, label) {
   ctx.beginPath(); ctx.arc(13, -6, 3, 0, Math.PI * 2); ctx.fillStyle = "#1B1B1F"; ctx.fill();
   ctx.restore();
 
-  const fontSize = Math.max(18, Math.round(canvas.width * 0.03));
+  const fontSize = Math.max(18, Math.round(canvas.width * 0.036));
   drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.bird, x - 44 * scale, y - 4 * scale, "left", fontSize);
 }
 
 function drawDinoCaption(ctx, canvas, label) {
-  const scale = (canvas.width / 1000) * 1.3;
-  const x = canvas.width * 0.16, y = canvas.height * 0.995;
+  const scale = (canvas.width / 1000) * 2.6;
+  const x = canvas.width * 0.2, y = canvas.height * 0.995;
 
   ctx.save();
   ctx.translate(x, y); ctx.scale(scale, scale);
@@ -3338,7 +3362,7 @@ function drawDinoCaption(ctx, canvas, label) {
   ctx.strokeStyle = "#1B1B1F"; ctx.lineWidth = 3; ctx.stroke();
   ctx.restore();
 
-  const fontSize = Math.max(18, Math.round(canvas.width * 0.03));
+  const fontSize = Math.max(18, Math.round(canvas.width * 0.036));
   drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.dino, x + 38 * scale, y - 70 * scale, "right", fontSize);
 }
 
