@@ -413,7 +413,8 @@
    CONFIG — questa è l'UNICA sezione che dovresti modificare.
 ========================================================== */
 
-const OPENSEA_API_KEY = "ee7a76e2c6b3445bbdd49211f24d2978";
+// La chiave OpenSea NON è più qui: la aggiunge il Cloudflare Worker (proxy) lato server.
+const OPENSEA_PROXY_BASE = "https://metamusex-proxy.metamusex.workers.dev";
 const FOUNDER_ADDRESS = "0xD7ac51b7647110064Ff484b1e2961dF4Ad6c0D7b";
 
 // Project ID di WalletConnect (cloud.walletconnect.com / cloud.reown.com),
@@ -1359,7 +1360,7 @@ async function fetchLeaderboardEntries() {
 async function fetchOpenSeaJson(url, retries = 3, baseDelayMs = 700) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const res = await fetch(url, { headers: { accept: "application/json", "x-api-key": OPENSEA_API_KEY } });
+      const res = await fetch(url, { headers: { accept: "application/json" } });
       if (res.status === 429 && attempt < retries) {
         const retryAfter = Number(res.headers.get("retry-after"));
         const delay = retryAfter > 0 ? retryAfter * 1000 : baseDelayMs * Math.pow(2, attempt);
@@ -1378,7 +1379,7 @@ async function fetchOpenSeaJson(url, retries = 3, baseDelayMs = 700) {
 }
 
 async function fetchOwnedNFTs(address, chain, slug) {
-  const url = `https://api.opensea.io/api/v2/chain/${chain}/account/${address}/nfts?collection=${slug}&limit=200`;
+  const url = `${OPENSEA_PROXY_BASE}/api/v2/chain/${chain}/account/${address}/nfts?collection=${slug}&limit=200`;
   const { ok, status, data } = await fetchOpenSeaJson(url);
   if (!ok) { console.warn(`OpenSea API error for ${slug}:`, status); return []; }
   return data.nfts || [];
@@ -1391,7 +1392,7 @@ async function fetchOwnedNFTs(address, chain, slug) {
 async function fetchOwnedNFTsAllCollections(address, chain, maxPages = 3) {
   let all = [], next;
   for (let page = 0; page < maxPages; page++) {
-    const url = `https://api.opensea.io/api/v2/chain/${chain}/account/${address}/nfts?limit=200${next ? `&next=${encodeURIComponent(next)}` : ""}`;
+    const url = `${OPENSEA_PROXY_BASE}/api/v2/chain/${chain}/account/${address}/nfts?limit=200${next ? `&next=${encodeURIComponent(next)}` : ""}`;
     const { ok, status, data } = await fetchOpenSeaJson(url);
     if (!ok) { console.warn(`OpenSea API error fetching all NFTs on ${chain}:`, status); break; }
     all = all.concat(data.nfts || []);
@@ -1426,7 +1427,7 @@ const collectionFullNameCache = {};
 async function fetchCollectionFullName(slug) {
   if (collectionFullNameCache[slug]) return collectionFullNameCache[slug];
   try {
-    const url = `https://api.opensea.io/api/v2/collections/${slug}`;
+    const url = `${OPENSEA_PROXY_BASE}/api/v2/collections/${slug}`;
     const { ok, data } = await fetchOpenSeaJson(url);
     const name = ok && data && data.name ? data.name : null;
     collectionFullNameCache[slug] = name;
@@ -1443,7 +1444,7 @@ function getGroupFullName(group) {
 }
 
 async function fetchCollectionTraits(slug) {
-  const url = `https://api.opensea.io/api/v2/traits/${slug}`;
+  const url = `${OPENSEA_PROXY_BASE}/api/v2/traits/${slug}`;
   const { ok, status, data } = await fetchOpenSeaJson(url);
   if (!ok) { console.warn(`Traits API error for ${slug}:`, status); return null; }
   return data;
@@ -2506,7 +2507,7 @@ async function fetchAllCollectionNFTs(slug, maxPages = 25, maxItems = Infinity) 
   let all = [], next;
   for (let page = 0; page < maxPages; page++) {
     if (all.length >= maxItems) break;
-    const url = `https://api.opensea.io/api/v2/collection/${slug}/nfts?limit=200${next ? `&next=${encodeURIComponent(next)}` : ""}`;
+    const url = `${OPENSEA_PROXY_BASE}/api/v2/collection/${slug}/nfts?limit=200${next ? `&next=${encodeURIComponent(next)}` : ""}`;
     const { ok, status, data } = await fetchOpenSeaJson(url);
     if (!ok) { console.warn(`Collection NFTs API error for ${slug}:`, status); break; }
     all = all.concat(data.nfts || []);
