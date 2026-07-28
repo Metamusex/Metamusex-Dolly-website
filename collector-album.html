@@ -1306,6 +1306,7 @@ function shareStatsOnX(data) {
 async function submitLeaderboardStats(address, data) {
   if (!LEADERBOARD_API_URL) return;
   try {
+    const profile = getStoredProfile(address);
     const payload = {
       address: address.toLowerCase(),
       totalItems: data.totalOwnedItems,
@@ -1314,6 +1315,13 @@ async function submitLeaderboardStats(address, data) {
       albumPct: albumCompletionPct(data),
       totalBadges: countAllBadgesEarned(data),
       lastSeen: Date.now(),
+      // Nome utente e avatar scelti nella pagina Collector Profile (locali al
+      // browser finché non vengono inviati qui): li mandiamo insieme alle
+      // statistiche così la Leaderboard può mostrarli senza dover leggere
+      // localStorage di altri utenti (impossibile) o richiedere un login.
+      username: profile.username || "",
+      avatarEmoji: profile.avatarImage ? "" : (profile.avatarEmoji || "🧑"),
+      avatarImageUrl: profile.avatarImage ? profile.avatarImage.url : "",
     };
     // Niente header Content-Type esplicito: evita la preflight CORS (OPTIONS)
     // che Apps Script non gestisce bene di default. Lo script legge comunque
@@ -1338,6 +1346,9 @@ async function fetchLeaderboardEntries() {
       collectionsCompleted: Number(r.collectionsCompleted) || 0,
       albumPct: Number(r.albumPct) || 0,
       totalBadges: Number(r.totalBadges) || 0,
+      username: typeof r.username === "string" ? r.username.trim().slice(0, 24) : "",
+      avatarEmoji: typeof r.avatarEmoji === "string" ? r.avatarEmoji : "",
+      avatarImageUrl: typeof r.avatarImageUrl === "string" ? r.avatarImageUrl : "",
     }));
   } catch (err) {
     console.warn("Could not load leaderboard entries:", err);
@@ -2596,6 +2607,19 @@ async function loadLeaderboardData() {
   renderLeaderboardPage("totalBadges");
 }
 
+// Avatar mostrato nella colonna "Collector" della leaderboard: l'immagine
+// caricata/scelta dall'utente se presente, altrimenti l'emoji scelta,
+// altrimenti un'emoji generica di fallback (per chi non ha ancora
+// personalizzato il proprio profilo).
+function leaderboardAvatarHtml(entry) {
+  if (entry.avatarImageUrl) {
+    const safeSrc = escapeHtml(entry.avatarImageUrl);
+    return `<img src="${safeSrc}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--ink); flex-shrink:0;" />`;
+  }
+  const emoji = entry.avatarEmoji || "🧑";
+  return `<span style="display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; border:2px solid var(--ink); background:var(--panel); font-size:15px; flex-shrink:0;">${emoji}</span>`;
+}
+
 function renderLeaderboardPage(sortKey) {
   const sorted = [...leaderboardEntries].sort((a, b) => b[sortKey] - a[sortKey] || b.totalBadges - a.totalBadges);
   const options = LEADERBOARD_METRICS.map((m) => `<option value="${m.key}" ${m.key === sortKey ? "selected" : ""}>${m.label}</option>`).join("");
@@ -2604,14 +2628,23 @@ function renderLeaderboardPage(sortKey) {
     const rankClass = i === 0 ? "rank-gold" : i === 1 ? "rank-silver" : i === 2 ? "rank-bronze" : "";
     const isYou = currentAddress && e.address === currentAddress.toLowerCase();
     const rowClass = [isYou ? "leaderboard-row-you" : "", rankClass].filter(Boolean).join(" ");
-    return `<tr class="${rowClass}"><td>${rankLabel}</td><td class="mono"><span class="leaderboard-wallet-frame">${shortAddress(e.address)}${isYou ? " (you)" : ""}</span></td><td class="mono">${e.totalBadges}</td><td class="mono">${e.totalItems}</td><td class="mono">${e.collectionsOwned}/${ALBUM_GROUPS.length}</td><td class="mono">${e.collectionsCompleted}</td><td class="mono">${e.albumPct}%</td><td>${getCollectorRank(e.albumPct).title}</td></tr>`;
+    const displayName = e.username ? escapeHtml(e.username) : shortAddress(e.address);
+    const walletCell = `
+      <div style="display:flex; align-items:center; gap:10px;">
+        ${leaderboardAvatarHtml(e)}
+        <div>
+          <span class="leaderboard-wallet-frame mono">${displayName}${isYou ? " (you)" : ""}</span>
+          ${e.username ? `<div class="mono" style="font-size:10px; color:#6b6b70; margin-top:2px;">${shortAddress(e.address)}</div>` : ""}
+        </div>
+      </div>`;
+    return `<tr class="${rowClass}"><td>${rankLabel}</td><td>${walletCell}</td><td class="mono">${e.totalBadges}</td><td class="mono">${e.totalItems}</td><td class="mono">${e.collectionsOwned}/${ALBUM_GROUPS.length}</td><td class="mono">${e.collectionsCompleted}</td><td class="mono">${e.albumPct}%</td><td>${getCollectorRank(e.albumPct).title}</td></tr>`;
   }).join("");
 
   leaderboardPage.innerHTML = `
     <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
     <div class="section-title">Leaderboard <div class="bar"></div></div>
     <div class="mono" style="margin-bottom:14px; color:#6b6b70;">${leaderboardEntries.length} registered wallet${leaderboardEntries.length === 1 ? "" : "s"} (users who've connected to the album, not every on-chain holder). Sorted by: <select id="leaderboardSort" class="mono">${options}</select></div>
-    <table class="leaderboard-table"><thead><tr><th></th><th>Wallet</th><th>Badges</th><th>NFTs</th><th>Collections</th><th>Completed</th><th>Rank %</th><th>Collector Rank</th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="leaderboard-table"><thead><tr><th></th><th>Collector</th><th>Badges</th><th>NFTs</th><th>Collections</th><th>Completed</th><th>Rank %</th><th>Collector Rank</th></tr></thead><tbody>${rows}</tbody></table>
     <span class="back-link bottom" onclick="hideTraitPages()">&larr; Back to album</span>
   `;
   document.getElementById("leaderboardSort").addEventListener("change", (e) => renderLeaderboardPage(e.target.value));
