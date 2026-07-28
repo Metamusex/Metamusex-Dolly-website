@@ -2851,11 +2851,13 @@ async function loadAirdropData() {
 const RELAX_COLLECTIONS = {
   summer: {
     slug: "metamusex-summer-vibes",
+    assetFolder: "metamusex-summer-vibes",
     enabled: false, // nascosto per ora: tratti non ancora rivelati
     layerOrder: ["eyes", "body", "mouth", "outfit", "hair", "glasses", "accessories"],
   },
   men: {
-    slug: "metamusex-men-official",
+    slug: "metamusex-men-official", // slug reale su OpenSea, usato per le chiamate API
+    assetFolder: "metamusex-men-official", // nome cartella usato nel repo per gli asset
     enabled: true,
     layerOrder: ["body", "eyes", "clothes", "glasses", "hair-and-hat", "accessory", "mouth"],
   },
@@ -2876,6 +2878,12 @@ const RELAX_ASSET_BASE = "assets/relax";
 
 function slugifyRelax(str) {
   return String(str).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+// Gli NFT con un trait type "Special" (qualsiasi valore) non possono andare a riposo:
+// spesso pezzi unici che non seguono la struttura a layer standard.
+function isSpecialRelaxItem(item) {
+  return (item.traits || []).some((t) => slugifyRelax(t.trait_type) === "special");
 }
 
 function getRelaxChain(groupKey) {
@@ -2961,6 +2969,11 @@ function relaxWidgetHtml(groupKey, identifier) {
   if (!config) return "";
   if (!currentAddress) return `<div class="relax-widget"><div class="relax-status mono">Connetti il wallet per mettere a riposo</div></div>`;
 
+  const item = (RELAX_ITEMS_BY_ID[groupKey] || {})[String(identifier)];
+  if (item && isSpecialRelaxItem(item)) {
+    return `<div class="relax-widget"><div class="relax-status mono">Pezzo speciale: non può andare a riposo</div></div>`;
+  }
+
   const state = getRestState(currentAddress, config.slug, identifier);
 
   if (!state) {
@@ -2999,6 +3012,7 @@ async function handleRelaxClick(groupKey, identifier) {
   if (!currentAddress) { alert("Connetti il wallet prima."); return; }
   const item = (RELAX_ITEMS_BY_ID[groupKey] || {})[String(identifier)];
   if (!item) { alert("NFT non trovato tra quelli posseduti."); return; }
+  if (isSpecialRelaxItem(item)) { alert("Questo è un pezzo speciale e non può andare a riposo."); return; }
 
   const activeElsewhere = getActiveRestForCollection(currentAddress, config.slug, identifier);
   if (activeElsewhere) {
@@ -3038,7 +3052,7 @@ async function composeRelaxImage(groupKey, identifier, level, traits) {
   canvas.width = 1000; canvas.height = 1000;
   const ctx = canvas.getContext("2d");
 
-  const bgSrc = `${RELAX_ASSET_BASE}/backgrounds/${config.slug}/level-${level}.png`;
+  const bgSrc = `${RELAX_ASSET_BASE}/backgrounds/${config.assetFolder}/level-${level}.png`;
   const bgImg = await loadImage(bgSrc);
   ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
 
@@ -3048,7 +3062,7 @@ async function composeRelaxImage(groupKey, identifier, level, traits) {
   for (const layerType of layerOrder) {
     const value = traitMap[layerType];
     if (!value) continue;
-    const layerSrc = `${RELAX_ASSET_BASE}/layers/${config.slug}/${layerType}/${value}.png`;
+    const layerSrc = `${RELAX_ASSET_BASE}/layers/${config.assetFolder}/${layerType}/${value}.png`;
     try {
       const layerImg = await loadImage(layerSrc);
       ctx.drawImage(layerImg, 0, 0, canvas.width, canvas.height);
