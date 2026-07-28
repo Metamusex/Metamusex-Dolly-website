@@ -109,6 +109,12 @@
     font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.08em;
     border: 2px solid var(--pink); padding: 3px 30px; transform: rotate(18deg); border-radius: 3px; opacity: 0.9;
   }
+  .relax-widget { margin-top: 10px; padding-top: 10px; border-top: 2px dashed var(--ink); display: flex; flex-direction: column; gap: 6px; }
+  .relax-bar-track { height: 10px; background: var(--paper); border: 2px solid var(--ink); border-radius: 999px; overflow: hidden; }
+  .relax-bar-fill { height: 100%; background: var(--pink); transition: width 0.3s ease; }
+  .relax-status { font-size: 11px; color: #6b6b70; }
+  .relax-btn { font-size: 12px; padding: 8px 14px; width: 100%; }
+  .relax-btn.secondary { background: var(--yellow); }
   .trait-page { display: none; margin-top: 16px; }
   .trait-page.active { display: block; }
   .owned-items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 8px; }
@@ -1917,9 +1923,16 @@ function renderGroupPages(byGroup, traitsMeta, badgeData) {
     const items = byGroup[group.key] || [];
     if (items.length === 0) return;
 
+    if (group.key === RELAX_GROUP_KEY) {
+      items.forEach((item) => { if (item.identifier != null) RELAX_ITEMS_BY_ID[String(item.identifier)] = item; });
+    }
+
     const itemsHtml = items.map((item) => {
       const thumb = itemThumbHtml(item, group.icon);
-      return `<div class="owned-item-card">${thumb}<div class="item-name">${escapeHtml(getItemName(item))}</div></div>`;
+      const relaxHtml = group.key === RELAX_GROUP_KEY
+        ? `<div class="relax-widget-container" id="relax-widget-${item.identifier}">${relaxWidgetHtml(currentAddress, group.slug, item.identifier)}</div>`
+        : "";
+      return `<div class="owned-item-card">${thumb}<div class="item-name">${escapeHtml(getItemName(item))}</div>${relaxHtml}</div>`;
     }).join("");
 
     let curatedHtml = "";
@@ -2824,6 +2837,185 @@ async function loadAirdropData() {
   if (myAddress) {
     const newlyOwned = checkNewAirdropItems(myAddress, allOwnedAcrossSections);
     if (newlyOwned.length > 0) showAirdropDropPopup(newlyOwned);
+  }
+}
+
+/* ============================================================
+   RELAX SYSTEM — solo per la collezione Summer Vibes
+   ============================================================ */
+
+const RELAX_GROUP_KEY = "summer"; // deve combaciare con la key in ALBUM_GROUPS
+const RELAX_COLLECTION_SLUG = "metamusex-summer-vibes";
+const RELAX_GROUP_CHAIN = (ALBUM_GROUPS.find((g) => g.key === RELAX_GROUP_KEY) || {}).chain || "robinhood";
+const RELAX_ITEMS_BY_ID = {}; // popolato in renderGroupPages con gli item posseduti di questo gruppo
+
+// Soglie CUMULATIVE in giorni dall'inizio del riposo (non resettabili)
+// Livello 1: 3gg totali | Livello 2: 3+6=9gg | Livello 3: 9+20=29gg | Livello 4: 29+35=64gg
+const REST_LEVEL_DURATIONS_DAYS = [3, 6, 20, 35];
+const REST_LEVEL_THRESHOLDS_DAYS = REST_LEVEL_DURATIONS_DAYS.reduce((acc, d) => {
+  const prev = acc.length ? acc[acc.length - 1] : 0;
+  acc.push(prev + d);
+  return acc;
+}, []); // -> [3, 9, 29, 64]
+
+const RELAX_ASSET_BASE = "assets/relax";
+
+// Ordine layer Summer Vibes, dal più basso al più alto (Background escluso: lo sostituiamo noi)
+const COLLECTION_LAYER_ORDER = {
+  [RELAX_COLLECTION_SLUG]: ["eyes", "body", "mouth", "outfit", "hair", "glasses", "accessories"],
+};
+
+function slugifyRelax(str) {
+  return String(str).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function restStorageKey(address, identifier) {
+  return `relax:${address.toLowerCase()}:${RELAX_COLLECTION_SLUG}:${identifier}`;
+}
+
+function startRest(address, identifier) {
+  const key = restStorageKey(address, identifier);
+  const existing = localStorage.getItem(key);
+  if (existing) return JSON.parse(existing);
+  const state = { startedAt: Date.now(), identifier };
+  localStorage.setItem(key, JSON.stringify(state));
+  return state;
+}
+
+function getRestState(address, identifier) {
+  if (!address) return null;
+  const raw = localStorage.getItem(restStorageKey(address, identifier));
+  if (!raw) return null;
+  const state = JSON.parse(raw);
+  const elapsedDays = (Date.now() - state.startedAt) / (1000 * 60 * 60 * 24);
+
+  let currentLevel = 0;
+  for (let i = 0; i < REST_LEVEL_THRESHOLDS_DAYS.length; i++) {
+    if (elapsedDays >= REST_LEVEL_THRESHOLDS_DAYS[i]) currentLevel = i + 1;
+  }
+
+  const nextThreshold = REST_LEVEL_THRESHOLDS_DAYS[currentLevel] ?? null;
+  const prevThreshold = currentLevel > 0 ? REST_LEVEL_THRESHOLDS_DAYS[currentLevel - 1] : 0;
+  const progressPercent = nextThreshold != null
+    ? Math.min(100, ((elapsedDays - prevThreshold) / (nextThreshold - prevThreshold)) * 100)
+    : 100;
+
+  return {
+    ...state, elapsedDays, currentLevel,
+    maxLevel: REST_LEVEL_THRESHOLDS_DAYS.length,
+    nextThresholdDays: nextThreshold, progressPercent,
+    isMaxed: currentLevel >= REST_LEVEL_THRESHOLDS_DAYS.length,
+  };
+}
+
+async function isNftListedForSale(chain, contractAddress, identifier) {
+  try {
+    const url = `${OPENSEA_PROXY_BASE}/api/v2/orders/${chain}/seaport/listings?asset_contract_address=${contractAddress}&token_ids=${identifier}&limit=1`;
+    const res = await fetch(url, { headers: { accept: "application/json" } });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return Array.isArray(data.orders) && data.orders.length > 0;
+  } catch (e) {
+    console.warn("Impossibile verificare lo stato di vendita:", e);
+    return false;
+  }
+}
+
+function relaxWidgetHtml(address, collectionSlug, identifier) {
+  if (!address) return `<div class="relax-widget"><div class="relax-status mono">Connetti il wallet per mettere a riposo</div></div>`;
+
+  const state = getRestState(address, identifier);
+
+  if (!state) {
+    return `<div class="relax-widget"><button class="relax-btn" onclick="handleRelaxClick('${identifier}')">😌 Relax</button></div>`;
+  }
+
+  const pct = Math.round(state.progressPercent);
+  const daysLeft = state.nextThresholdDays != null ? Math.max(0, state.nextThresholdDays - state.elapsedDays).toFixed(1) : 0;
+
+  return `
+    <div class="relax-widget">
+      <div class="relax-bar-track"><div class="relax-bar-fill" style="width:${pct}%;"></div></div>
+      <div class="relax-status mono">${state.isMaxed ? "Livello massimo raggiunto ✨" : `Livello ${state.currentLevel}/${state.maxLevel} · ${daysLeft}gg al prossimo`}</div>
+      ${state.currentLevel > 0 ? `<button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${identifier}', ${state.currentLevel})">⬇️ Scarica (Liv. ${state.currentLevel})</button>` : ""}
+    </div>`;
+}
+
+function refreshRelaxWidget(identifier) {
+  const el = document.getElementById(`relax-widget-${identifier}`);
+  if (el) el.innerHTML = relaxWidgetHtml(currentAddress, RELAX_COLLECTION_SLUG, identifier);
+}
+
+async function handleRelaxClick(identifier) {
+  if (!currentAddress) { alert("Connetti il wallet prima."); return; }
+  const item = RELAX_ITEMS_BY_ID[String(identifier)];
+  if (!item) { alert("NFT non trovato tra quelli posseduti."); return; }
+
+  const btn = document.querySelector(`#relax-widget-${identifier} .relax-btn`);
+  if (btn) { btn.disabled = true; btn.textContent = "Verifico..."; }
+
+  const listed = await isNftListedForSale(RELAX_GROUP_CHAIN, item.contract, identifier);
+  if (listed) {
+    alert("Questo NFT è attualmente in vendita: rimuovi l'inserzione per poterlo mettere a riposo.");
+    refreshRelaxWidget(identifier);
+    return;
+  }
+
+  startRest(currentAddress, identifier);
+  refreshRelaxWidget(identifier);
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Impossibile caricare ${src}`));
+    img.src = src;
+  });
+}
+
+async function composeRelaxImage(identifier, level, traits) {
+  const layerOrder = COLLECTION_LAYER_ORDER[RELAX_COLLECTION_SLUG];
+  const canvas = document.createElement("canvas");
+  canvas.width = 1000; canvas.height = 1000;
+  const ctx = canvas.getContext("2d");
+
+  const bgSrc = `${RELAX_ASSET_BASE}/backgrounds/${RELAX_COLLECTION_SLUG}/level-${level}.png`;
+  const bgImg = await loadImage(bgSrc);
+  ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+
+  const traitMap = {};
+  (traits || []).forEach((t) => { traitMap[slugifyRelax(t.trait_type)] = slugifyRelax(t.value); });
+
+  for (const layerType of layerOrder) {
+    const value = traitMap[layerType];
+    if (!value) continue;
+    const layerSrc = `${RELAX_ASSET_BASE}/layers/${RELAX_COLLECTION_SLUG}/${layerType}/${value}.png`;
+    try {
+      const layerImg = await loadImage(layerSrc);
+      ctx.drawImage(layerImg, 0, 0, canvas.width, canvas.height);
+    } catch (e) {
+      console.warn(e.message);
+    }
+  }
+
+  return canvas;
+}
+
+async function handleDownloadRelaxImage(identifier, level) {
+  const item = RELAX_ITEMS_BY_ID[String(identifier)];
+  if (!item) { alert("Dati NFT non disponibili per la ricomposizione."); return; }
+
+  try {
+    const canvas = await composeRelaxImage(identifier, level, item.traits);
+    const link = document.createElement("a");
+    link.download = `summer-vibes-${identifier}-relax-level-${level}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  } catch (e) {
+    console.error(e);
+    alert("Errore nella generazione dell'immagine. Controlla che tutti gli asset siano caricati correttamente.");
   }
 }
 </script>
