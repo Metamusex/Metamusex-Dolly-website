@@ -274,7 +274,7 @@
   <div id="albumContent" style="display:none;">
 
     <div class="page-nav-buttons" id="pageNavButtons">
-      <button type="button" id="statsBtn" class="secondary">📊 My Stats</button>
+      <button type="button" id="statsBtn" class="secondary">📊 Collector Profile</button>
       <button type="button" id="airdropBtn" class="secondary">🎁 Airdrop</button>
       <button type="button" id="badgeGuideBtn" class="secondary">📖 Badge Guide</button>
       <button type="button" id="leaderboardBtn" class="secondary">👑 Leaderboard</button>
@@ -474,6 +474,7 @@ const BADGES = [
   { key: "og", label: "OG Holder", icon: "⭐", check: (data) => data.groupsOwned.size >= 5 },
   { key: "diamond", label: "Diamond Collector", icon: "💎", check: (data) => data.groupsOwned.size === ALBUM_GROUPS.length },
   { key: "chain-hopper", label: "Multi-Chain", icon: "🌉", check: (data) => countChainsOwned(data) >= 2 },
+  { key: "rare-collector", label: "Rare Collector", icon: "🐋", check: (data) => countRarePiecesOwned(data) >= 5 },
 ];
 
 // ==========================================================
@@ -1322,6 +1323,31 @@ async function fetchSecretItemOwnership(address) {
   }
 }
 
+// Cache dei nomi ufficiali completi delle collezioni (es. "MetaMuseX - Girl
+// PFP (official/certified)" invece della semplice label breve "Girls" usata
+// nell'album). Recuperati una sola volta da OpenSea e riusati ovunque serva
+// mostrare il nome per esteso.
+const collectionFullNameCache = {};
+
+async function fetchCollectionFullName(slug) {
+  if (collectionFullNameCache[slug]) return collectionFullNameCache[slug];
+  try {
+    const url = `https://api.opensea.io/api/v2/collections/${slug}`;
+    const { ok, data } = await fetchOpenSeaJson(url);
+    const name = ok && data && data.name ? data.name : null;
+    collectionFullNameCache[slug] = name;
+    return name;
+  } catch (err) {
+    console.warn(`Could not fetch full collection name for ${slug}:`, err);
+    return null;
+  }
+}
+
+function getGroupFullName(group) {
+  if (!group) return "";
+  return collectionFullNameCache[group.slug] || group.label;
+}
+
 async function fetchCollectionTraits(slug) {
   const url = `https://api.opensea.io/api/v2/traits/${slug}`;
   const { ok, status, data } = await fetchOpenSeaJson(url);
@@ -1354,6 +1380,10 @@ async function loadAlbum(address) {
 
   const secretOwnedIds = await fetchSecretItemOwnership(address);
   const visitDays = recordVisitDay(address);
+
+  // Nomi ufficiali completi delle collezioni (in parallelo tra loro), usati
+  // ad esempio nella classifica dei pezzi più rari nella pagina Stats.
+  await Promise.all(ALBUM_GROUPS.map((g) => fetchCollectionFullName(g.slug)));
 
   const badgeData = buildBadgeData(byGroup, traitsMeta);
   badgeData.secretOwnedIds = secretOwnedIds;
@@ -2019,6 +2049,29 @@ function groupBadgeStats(data, group) {
   return { earned: badges.filter((b) => b.earned).length, total: badges.length };
 }
 
+// Conta quanti NFT DISTINTI possiede l'utente che hanno almeno un trait
+// ultra-raro (posseduto da pochissimi esemplari in tutta la collezione).
+// Diverso da countUltraRareTraitsOwned: quello conta i TRAIT rari (un NFT
+// con 2 trait rari conta 2), questo conta i PEZZI rari (lo stesso NFT con
+// 2 trait rari conta comunque 1 solo pezzo). Usato dal badge "Rare Collector".
+function countRarePiecesOwned(data, maxCount = RARE_TRAIT_MAX_COUNT) {
+  let count = 0;
+  Object.entries(data.byGroup).forEach(([groupKey, items]) => {
+    const normMeta = getNormalizedTraitsMeta(data.traitsMeta && data.traitsMeta[groupKey]);
+    if (!normMeta) return;
+    items.forEach((item) => {
+      const hasRareTrait = (item.traits || []).some((t) => {
+        const normType = normTraitType(t.trait_type);
+        const countsForType = normMeta.counts[normType];
+        const c = countsForType && buildNormalizedCounts(countsForType)[normTraitValue(t.value)];
+        return c && typeof c.count === "number" && c.count <= maxCount;
+      });
+      if (hasRareTrait) count++;
+    });
+  });
+  return count;
+}
+
 function getRarestOwnedPiece(data) {
   let best = null;
   Object.entries(data.byGroup).forEach(([groupKey, items]) => {
@@ -2064,7 +2117,7 @@ function getTopRarestOwnedPieces(data, limit = 5) {
           count: best.count,
           traitType: best.traitType,
           value: best.value,
-          groupLabel: group ? group.label : groupKey,
+          groupLabel: getGroupFullName(group),
           groupKey,
           itemName: getItemName(item),
           item,
@@ -2143,7 +2196,7 @@ function buildStatsPageHtml(data) {
 
   return `
     <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
-    <div class="section-title">My Stats <div class="bar"></div></div>
+    <div class="section-title">Collector Profile <div class="bar"></div></div>
     <div class="stat-cards">
       <div class="stat-card"><div class="stat-value display">${data.totalOwnedItems}</div><div class="stat-label mono">Items Owned</div></div>
       <div class="stat-card"><div class="stat-value display">${data.groupsOwned.size}/${ALBUM_GROUPS.length}</div><div class="stat-label mono">Collections</div></div>
@@ -2166,7 +2219,7 @@ function buildStatsPageHtml(data) {
 function showStatsPage() {
   statsPage.innerHTML = lastBadgeData
     ? buildStatsPageHtml(lastBadgeData)
-    : `<span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span><div class="section-title">My Stats <div class="bar"></div></div><div class="mono">Connect your wallet to see your stats.</div>`;
+    : `<span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span><div class="section-title">Collector Profile <div class="bar"></div></div><div class="mono">Connect your wallet to see your stats.</div>`;
   mainView.style.display = "none";
   document.querySelectorAll(".trait-page").forEach((p) => p.classList.remove("active"));
   statsPage.classList.add("active");
@@ -2308,6 +2361,7 @@ const GENERAL_BADGE_GUIDE = [
   { icon: "⭐", name: "OG Holder", desc: "Own NFTs from at least 5 MetaMuseX/Dolly collections." },
   { icon: "💎", name: "Diamond Collector", desc: "Own NFTs from every MetaMuseX/Dolly collection." },
   { icon: "🌉", name: "Multi-Chain", desc: "Own NFTs across at least 2 different blockchains." },
+  { icon: "🐋", name: "Rare Collector", desc: "Own at least 5 distinct NFTs that each have an ultra-rare trait value (held by very few pieces across the whole collection)." },
 ];
 
 const COLLECTION_BADGE_GUIDE = [
