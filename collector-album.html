@@ -2977,13 +2977,14 @@ function getRestState(address, collectionSlug, identifier) {
   };
 }
 
-async function isNftListedForSale(chain, contractAddress, identifier) {
+async function isNftListedForSale(collectionSlug, identifier) {
   try {
-    const url = `${OPENSEA_PROXY_BASE}/api/v2/orders/${chain}/seaport/listings?asset_contract_address=${contractAddress}&token_ids=${identifier}&limit=1`;
+    const url = `${OPENSEA_PROXY_BASE}/api/v2/listings/collection/${collectionSlug}/nfts/${identifier}/best`;
     const res = await fetch(url, { headers: { accept: "application/json" } });
-    if (!res.ok) return false;
+    if (res.status === 404) return false; // nessuna inserzione attiva per questo NFT
+    if (!res.ok) return false; // in dubbio, non blocchiamo l'utente
     const data = await res.json();
-    return Array.isArray(data.orders) && data.orders.length > 0;
+    return !!(data && (data.listing || data.order || data.price));
   } catch (e) {
     console.warn("Impossibile verificare lo stato di vendita:", e);
     return false;
@@ -3050,7 +3051,7 @@ async function handleRelaxClick(groupKey, identifier) {
   const btn = document.querySelector(`#relax-widget-${groupKey}-${identifier} .relax-btn`);
   if (btn) { btn.disabled = true; btn.textContent = "Verifico..."; }
 
-  const listed = await isNftListedForSale(getRelaxChain(groupKey), item.contract, identifier);
+  const listed = await isNftListedForSale(config.slug, identifier);
   if (listed) {
     alert("Questo NFT è attualmente in vendita: rimuovi l'inserzione per poterlo mettere a riposo.");
     refreshRelaxWidget(groupKey, identifier);
