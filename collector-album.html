@@ -1981,7 +1981,9 @@ function renderGroupPages(byGroup, traitsMeta, badgeData) {
       const relaxHtml = (relaxConfig && relaxConfig.enabled)
         ? `<div class="relax-widget-container" id="relax-widget-${group.key}-${item.identifier}">${relaxWidgetHtml(group.key, item.identifier)}</div>`
         : "";
-      return `<div class="owned-item-card">${thumb}<div class="item-name">${escapeHtml(getItemName(item))}</div>${relaxHtml}</div>`;
+      const cardId = relaxConfig ? ` id="owned-card-${group.key}-${item.identifier}"` : "";
+      const cardStyle = relaxConfig ? ` style="${relaxCardBorderStyle(group.key, item.identifier)}"` : "";
+      return `<div class="owned-item-card"${cardId}${cardStyle}>${thumb}<div class="item-name">${escapeHtml(getItemName(item))}</div>${relaxHtml}</div>`;
     }).join("");
 
     let curatedHtml = "";
@@ -2782,12 +2784,13 @@ function buildCollectorRankGuideHtml() {
 
 function buildRelaxGuideHtml() {
   const cards = [
-    guideCardHtml("😌", "Put an NFT to rest", "On any owned NFT (not listed for sale) you can click \"Relax\" to put it to rest. You can rest one NFT per collection at a time."),
+    guideCardHtml("😌", "Put an NFT to rest", "On any owned NFT click \"Relax\" to put it to rest. Two rules: it must NOT be listed for sale, and you can only rest one NFT per collection at a time. The not-listed rule is also checked again every time you customize it."),
     guideCardHtml("⏳", "Levels and wait time", "The longer you leave the NFT resting, the more levels you unlock: time is cumulative from the moment you clicked \"Relax\" and never resets."),
     guideCardHtml("🎨", "A new background per level", "Every level you reach unlocks a new background for your character."),
     guideCardHtml("⬇️", "Download your image", "Once a level is unlocked, you can download an image of your character on the new background — if you've unlocked more than one level, pick which one to use. You can also add a caption or a small decorative creature before downloading."),
     guideCardHtml("🔓", "Slot frees up", "Once the resting NFT reaches the max level, the slot frees up: you can put another NFT from the same collection to rest."),
-    guideCardHtml("↩️", "Changed your mind?", "You can remove an NFT from rest at any time by clicking \"Remove from rest\" — note that current progress will be lost."),
+    guideCardHtml("🎨", "Max level reached", "Once an NFT reaches the current max level, it automatically comes off rest and shows a \"Customize\" button instead of \"Relax\" — you can customize it as many times as you like from then on."),
+    guideCardHtml("↩️", "Changed your mind?", "You can pause an NFT's rest at any time by clicking \"Remove from rest\" — the level it already reached is kept, and its \"Relax\" button becomes clickable again whenever you want to continue toward the next level."),
     guideCardHtml("🖼️", "Create Your Custom NFT", "Head to \"🎨 Create Your Custom NFT\" anytime to see, per collection, which levels are unlocked and what each one reveals (e.g. \"Background\"). Note: this doesn't mint anything — it's just an image you can download and use for fun or on social media."),
     guideCardHtml("🎨", "Color-coded levels", "Each level has its own color: grey = no level yet, blue = level 1, purple = level 2, pink = level 3, gold = level 4 (max). You'll see this color on the resting NFT's card and in the Relax Gallery."),
   ];
@@ -2859,8 +2862,8 @@ function showRelaxGalleryPage() {
       const label = group ? group.label : groupKey;
       const entries = getAllRestEntriesForCollection(currentAddress, groupKey);
       if (entries.length === 0) return relaxGalleryCollectionHtml(groupKey, label, 0, null);
-      const active = entries.find((e) => !e.state.isMaxed);
-      const chosen = active || entries.slice().sort((a, b) => b.state.startedAt - a.state.startedAt)[0];
+      const active = entries.find((e) => e.state.isActive);
+      const chosen = active || entries.slice().sort((a, b) => (b.state.updatedAt || 0) - (a.state.updatedAt || 0))[0];
       return relaxGalleryCollectionHtml(groupKey, label, chosen.state.currentLevel, chosen.identifier);
     }).join("");
 
@@ -2868,7 +2871,7 @@ function showRelaxGalleryPage() {
       <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
       <div class="section-title">🎨 Create Your Custom NFT <div class="bar"></div></div>
       <div class="mono" style="font-size:12px; color:#6b6b70; margin:-14px 0 20px;">This doesn't mint anything — it's just an image you can download and use for fun or on social media.</div>
-      <div class="mono" style="font-size:13px; line-height:1.6; margin-bottom:20px;">These are the levels unlockable in each collection. Only one NFT can rest at a time per collection, but any NFT that reaches a given level while resting can be customized at that level — over time, different NFTs from the same collection can each unlock and use these same levels, one at a time. Check the colored border on an NFT's card to see its level: <strong>grey</strong> = none, <strong>blue</strong> = level 1, <strong>purple</strong> = level 2, <strong>pink</strong> = level 3, <strong>gold</strong> = level 4 (max).</div>
+      <div class="mono" style="font-size:13px; line-height:1.6; margin-bottom:20px;">This system currently applies to the <strong>MetaMuseX Men</strong> collection only, and will extend to <strong>MetaMuseX Summer Vibes</strong> in the future. These are the levels unlockable in each collection. Only <strong>one NFT at a time</strong> can rest per collection, and it must <strong>not be listed for sale</strong> to be put to rest — but any NFT that reaches a given level while resting can be customized at that level, and over time, different NFTs from the same collection can each unlock and use these same levels, one at a time. Check the colored border on an NFT's card to see its level: <strong>grey</strong> = none, <strong>blue</strong> = level 1, <strong>purple</strong> = level 2, <strong>pink</strong> = level 3, <strong>gold</strong> = level 4 (max).</div>
       ${sections}
       <span class="back-link bottom" onclick="hideTraitPages()">&larr; Back to album</span>`;
   }
@@ -2890,7 +2893,7 @@ function showBadgeGuidePage() {
     <div class="section-title" style="margin-top:32px; font-size:20px;">Collection Badges <div class="bar"></div></div>
     <div class="guide-list">${COLLECTION_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div>
     <div class="section-title" style="margin-top:32px; font-size:20px;">🎨 Create Your Custom NFT <div class="bar"></div></div>
-    <div class="mono" style="font-size:12px; color:#6b6b70; margin-top:-8px;">This doesn't mint anything — it's just an image you can download and use for fun or on social media.</div>
+    <div class="mono" style="font-size:12px; color:#6b6b70; margin-top:-8px;">This doesn't mint anything — it's just an image you can download and use for fun or on social media. Currently applies to the MetaMuseX Men collection only, with MetaMuseX Summer Vibes coming in the future.</div>
     ${buildRelaxGuideHtml()}
     <div class="mono" style="margin-top:28px; color:#6b6b70; font-size:13px;">Psst — not every badge is listed here. Some are secret and only reveal themselves once you've earned them...</div>
     <span class="back-link bottom" onclick="hideTraitPages()">&larr; Back to album</span>
@@ -3060,60 +3063,99 @@ function restStorageKey(address, collectionSlug, identifier) {
   return `relax:${address.toLowerCase()}:${collectionSlug}:${identifier}`;
 }
 
-// Cerca, per questo wallet e questa collezione, se c'è già un NFT a riposo
-// che NON ha ancora raggiunto il livello massimo (diverso da quello passato).
-// Un solo NFT "attivo" per collezione può riposare alla volta; una volta
-// raggiunto il livello massimo, si libera lo slot per un nuovo NFT.
+// Blocca lo slot della collezione solo un NFT che sta ATTIVAMENTE contando il tempo.
+// Un NFT in pausa (che ha raggiunto un livello e poi è stato "rimosso dal riposo",
+// o che ha raggiunto il massimo) non blocca più nulla.
 function getActiveRestForCollection(address, collectionSlug, excludingIdentifier) {
   const prefix = `relax:${address.toLowerCase()}:${collectionSlug}:`;
-  const maxThreshold = REST_LEVEL_THRESHOLDS_DAYS[REST_LEVEL_THRESHOLDS_DAYS.length - 1];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (!key || !key.startsWith(prefix)) continue;
     const identifier = key.slice(prefix.length);
     if (String(identifier) === String(excludingIdentifier)) continue;
-    try {
-      const state = JSON.parse(localStorage.getItem(key));
-      const elapsedDays = (Date.now() - state.startedAt) / (1000 * 60 * 60 * 24);
-      if (elapsedDays >= maxThreshold) continue; // già maxato: non blocca più lo slot
-      return { identifier, ...state };
-    } catch (e) {}
+    const state = getRestState(address, collectionSlug, identifier);
+    if (!state || !state.isActive) continue;
+    return { identifier, ...state };
   }
   return null;
 }
 
+// Avvia il riposo, oppure — se l'NFT era in pausa con un livello già raggiunto —
+// riprende il conteggio da dove si era fermato (il progresso non viene mai perso).
 function startRest(address, collectionSlug, identifier) {
   const key = restStorageKey(address, collectionSlug, identifier);
-  const existing = localStorage.getItem(key);
-  if (existing) return JSON.parse(existing);
-  const state = { startedAt: Date.now(), identifier };
-  localStorage.setItem(key, JSON.stringify(state));
-  return state;
+  const raw = localStorage.getItem(key);
+  const now = Date.now();
+  if (raw) {
+    const record = JSON.parse(raw);
+    if (record.startedAt == null) {
+      record.startedAt = now;
+      record.updatedAt = now;
+      localStorage.setItem(key, JSON.stringify(record));
+    }
+    return record;
+  }
+  const record = { accumulatedDays: 0, startedAt: now, updatedAt: now, identifier };
+  localStorage.setItem(key, JSON.stringify(record));
+  return record;
+}
+
+// Mette in pausa un riposo attivo, "bancando" il progresso raggiunto fin lì.
+// Il livello raggiunto resta acquisito: l'NFT può riprendere il conteggio in
+// qualsiasi momento cliccando di nuovo "Relax", senza perdere nulla.
+function pauseRest(address, collectionSlug, identifier) {
+  const key = restStorageKey(address, collectionSlug, identifier);
+  const raw = localStorage.getItem(key);
+  if (!raw) return;
+  const record = JSON.parse(raw);
+  if (record.startedAt != null) {
+    const elapsed = (Date.now() - record.startedAt) / (1000 * 60 * 60 * 24);
+    record.accumulatedDays = (record.accumulatedDays || 0) + elapsed;
+    record.startedAt = null;
+    record.updatedAt = Date.now();
+    localStorage.setItem(key, JSON.stringify(record));
+  }
 }
 
 function getRestState(address, collectionSlug, identifier) {
   if (!address) return null;
-  const raw = localStorage.getItem(restStorageKey(address, collectionSlug, identifier));
+  const key = restStorageKey(address, collectionSlug, identifier);
+  const raw = localStorage.getItem(key);
   if (!raw) return null;
-  const state = JSON.parse(raw);
-  const elapsedDays = (Date.now() - state.startedAt) / (1000 * 60 * 60 * 24);
+  const record = JSON.parse(raw);
+  const totalLevels = REST_LEVEL_THRESHOLDS_DAYS.length;
+  const wasActive = record.startedAt != null;
+  const totalElapsedDays = (record.accumulatedDays || 0) + (wasActive ? (Date.now() - record.startedAt) / (1000 * 60 * 60 * 24) : 0);
 
   let currentLevel = 0;
-  for (let i = 0; i < REST_LEVEL_THRESHOLDS_DAYS.length; i++) {
-    if (elapsedDays >= REST_LEVEL_THRESHOLDS_DAYS[i]) currentLevel = i + 1;
+  for (let i = 0; i < totalLevels; i++) {
+    if (totalElapsedDays >= REST_LEVEL_THRESHOLDS_DAYS[i]) currentLevel = i + 1;
+  }
+  const isMaxed = currentLevel >= totalLevels;
+
+  // Raggiunto il livello massimo mentre era attivo: si "toglie dal riposo" da solo.
+  if (wasActive && isMaxed) {
+    record.accumulatedDays = totalElapsedDays;
+    record.startedAt = null;
+    record.updatedAt = Date.now();
+    localStorage.setItem(key, JSON.stringify(record));
   }
 
   const nextThreshold = REST_LEVEL_THRESHOLDS_DAYS[currentLevel] ?? null;
   const prevThreshold = currentLevel > 0 ? REST_LEVEL_THRESHOLDS_DAYS[currentLevel - 1] : 0;
   const progressPercent = nextThreshold != null
-    ? Math.min(100, ((elapsedDays - prevThreshold) / (nextThreshold - prevThreshold)) * 100)
+    ? Math.min(100, ((totalElapsedDays - prevThreshold) / (nextThreshold - prevThreshold)) * 100)
     : 100;
 
   return {
-    ...state, elapsedDays, currentLevel,
-    maxLevel: REST_LEVEL_THRESHOLDS_DAYS.length,
-    nextThresholdDays: nextThreshold, progressPercent,
-    isMaxed: currentLevel >= REST_LEVEL_THRESHOLDS_DAYS.length,
+    ...record,
+    elapsedDays: totalElapsedDays,
+    currentLevel,
+    maxLevel: totalLevels,
+    nextThresholdDays: nextThreshold,
+    progressPercent,
+    isMaxed,
+    isActive: wasActive && !isMaxed,
   };
 }
 
@@ -3134,10 +3176,19 @@ async function isNftListedForSale(collectionSlug, identifier) {
 function cancelRest(groupKey, identifier) {
   const config = RELAX_COLLECTIONS[groupKey];
   if (!config || !currentAddress) return;
-  const sure = confirm("Remove this NFT from rest? Current progress will be lost.");
+  const sure = confirm("Pause this NFT's rest? It'll keep the level it has already reached — click \"Relax\" again anytime to continue toward the next one.");
   if (!sure) return;
-  localStorage.removeItem(restStorageKey(currentAddress, config.slug, identifier));
+  pauseRest(currentAddress, config.slug, identifier);
   refreshAllRelaxWidgetsForCollection(groupKey);
+}
+
+function relaxCardBorderStyle(groupKey, identifier) {
+  const config = RELAX_COLLECTIONS[groupKey];
+  if (!config || !currentAddress) return "";
+  const state = getRestState(currentAddress, config.slug, identifier);
+  if (!state) return "";
+  const color = relaxLevelColor(state.currentLevel);
+  return `border-color:${color}; box-shadow: 4px 4px 0 ${color};`;
 }
 
 function relaxWidgetHtml(groupKey, identifier) {
@@ -3160,15 +3211,41 @@ function relaxWidgetHtml(groupKey, identifier) {
     return `<div class="relax-widget"><button class="relax-btn" onclick="handleRelaxClick('${groupKey}', '${identifier}')">😌 Relax</button></div>`;
   }
 
+  const levelColor = relaxLevelColor(state.currentLevel);
+
+  // Livello massimo raggiunto: si toglie dal riposo da solo, il pulsante diventa "Customize"
+  if (state.isMaxed) {
+    return `
+      <div class="relax-widget" style="border-top-color: ${levelColor};">
+        <div class="relax-status mono">Max level reached ✨</div>
+        <button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${groupKey}', '${identifier}', ${state.currentLevel})">🎨 Customize (Lvl ${state.currentLevel})</button>
+      </div>`;
+  }
+
+  // In pausa (rimosso dal riposo prima del livello massimo): livello raggiunto conservato,
+  // pulsante Relax di nuovo cliccabile per continuare verso i livelli successivi
+  if (!state.isActive) {
+    const activeElsewhere = getActiveRestForCollection(currentAddress, config.slug, identifier);
+    const relaxBtn = activeElsewhere
+      ? `<button class="relax-btn" disabled style="opacity:0.4; cursor:not-allowed;">😌 Relax</button>`
+      : `<button class="relax-btn" onclick="handleRelaxClick('${groupKey}', '${identifier}')">😌 Relax</button>`;
+    return `
+      <div class="relax-widget" style="border-top-color: ${levelColor};">
+        <div class="relax-status mono">${state.currentLevel > 0 ? `Level ${state.currentLevel}/${state.maxLevel} reached — paused` : "Not resting"}</div>
+        ${state.currentLevel > 0 ? `<button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${groupKey}', '${identifier}', ${state.currentLevel})">🎨 Customize (Lvl ${state.currentLevel})</button>` : ""}
+        ${relaxBtn}
+      </div>`;
+  }
+
+  // Attivamente a riposo, conteggio in corso
   const pct = Math.round(state.progressPercent);
   const daysLeft = state.nextThresholdDays != null ? Math.max(0, state.nextThresholdDays - state.elapsedDays).toFixed(1) : 0;
-  const levelColor = relaxLevelColor(state.currentLevel);
 
   return `
     <div class="relax-widget" style="border-top-color: ${levelColor};">
       <div class="relax-bar-track"><div class="relax-bar-fill" style="width:${pct}%; background:${levelColor};"></div></div>
-      <div class="relax-status mono">${state.isMaxed ? "Max level reached ✨" : `Level ${state.currentLevel}/${state.maxLevel} · ${daysLeft}d to next`}</div>
-      ${state.currentLevel > 0 ? `<button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${groupKey}', '${identifier}', ${state.currentLevel})">⬇️ Download (Lvl ${state.currentLevel})</button>` : ""}
+      <div class="relax-status mono">Level ${state.currentLevel}/${state.maxLevel} · ${daysLeft}d to next</div>
+      ${state.currentLevel > 0 ? `<button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${groupKey}', '${identifier}', ${state.currentLevel})">🎨 Customize (Lvl ${state.currentLevel})</button>` : ""}
       <button type="button" class="relax-caption-close" style="align-self:center;" onclick="cancelRest('${groupKey}', '${identifier}')">Remove from rest</button>
     </div>`;
 }
@@ -3176,6 +3253,8 @@ function relaxWidgetHtml(groupKey, identifier) {
 function refreshRelaxWidget(groupKey, identifier) {
   const el = document.getElementById(`relax-widget-${groupKey}-${identifier}`);
   if (el) el.innerHTML = relaxWidgetHtml(groupKey, identifier);
+  const card = document.getElementById(`owned-card-${groupKey}-${identifier}`);
+  if (card) card.setAttribute("style", relaxCardBorderStyle(groupKey, identifier));
 }
 
 // Ri-renderizza tutti i widget della collezione (usato dopo aver avviato un riposo,
@@ -3763,6 +3842,12 @@ async function handleDownloadRelaxImage(groupKey, identifier, level) {
   const config = RELAX_COLLECTIONS[groupKey];
   const item = (RELAX_ITEMS_BY_ID[groupKey] || {})[String(identifier)];
   if (!item) { alert("NFT data not available to rebuild the image."); return; }
+
+  const listed = await isNftListedForSale(config.slug, identifier);
+  if (listed) {
+    alert("This NFT is currently listed for sale, so it can't be customized right now. Remove the listing to continue.");
+    return;
+  }
 
   const state = getRestState(currentAddress, config.slug, identifier);
   const maxUnlocked = state ? state.currentLevel : level;
