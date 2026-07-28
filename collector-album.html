@@ -109,6 +109,32 @@
     font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.08em;
     border: 2px solid var(--pink); padding: 3px 30px; transform: rotate(18deg); border-radius: 3px; opacity: 0.9;
   }
+  .relax-caption-overlay {
+    position: fixed; inset: 0; background: rgba(27,27,31,0.75); z-index: 999;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .relax-caption-panel { background: var(--paper); max-width: 420px; width: 100%; padding: 20px; max-height: 90vh; overflow-y: auto; }
+  .relax-caption-title { font-family: 'Bangers', cursive; font-size: 26px; margin: 0 0 12px; }
+  .relax-caption-preview { width: 100%; border: 3px solid var(--ink); border-radius: 10px; margin-bottom: 14px; display: block; background: var(--grey); }
+  .relax-caption-styles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .relax-caption-style-btn {
+    font-family: 'Work Sans', sans-serif; font-size: 12px; font-weight: 700; padding: 8px 12px;
+    border: 2px solid var(--ink); border-radius: 10px; background: var(--paper); box-shadow: var(--shadow-hard-sm);
+  }
+  .relax-caption-style-btn.active { background: var(--blue); color: var(--paper); }
+  .relax-caption-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .relax-caption-preset-btn {
+    font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; padding: 8px 12px;
+    border: 2px solid var(--ink); border-radius: 999px; background: var(--paper); box-shadow: var(--shadow-hard-sm);
+  }
+  .relax-caption-preset-btn.active { background: var(--yellow); }
+  .relax-caption-input {
+    width: 100%; font-family: 'Work Sans', sans-serif; font-size: 15px; padding: 10px 12px;
+    border: 2px solid var(--ink); border-radius: 10px; margin-bottom: 14px; box-sizing: border-box;
+  }
+  .relax-caption-actions { display: flex; flex-direction: column; gap: 10px; }
+  .relax-caption-actions button { width: 100%; }
+  .relax-caption-close { background: none; border: none; box-shadow: none; text-decoration: underline; font-size: 13px; padding: 4px; cursor: pointer; }
   .relax-widget { margin-top: 10px; padding-top: 10px; border-top: 2px dashed var(--ink); display: flex; flex-direction: column; gap: 6px; }
   .relax-bar-track { height: 10px; background: var(--paper); border: 2px solid var(--ink); border-radius: 999px; overflow: hidden; }
   .relax-bar-fill { height: 100%; background: var(--pink); transition: width 0.3s ease; }
@@ -3074,16 +3100,246 @@ async function composeRelaxImage(groupKey, identifier, level, traits) {
   return canvas;
 }
 
+/* ---- Cartello/testo opzionale sopra l'immagine (stile fumetto) ---- */
+
+const RELAX_CAPTION_PRESETS = ["GM", "GN", "MINT NOW", "I'M A METAMUSEX FAN", "WAGMI", "LFG"];
+const RELAX_CAPTION_MAX_LENGTH = 28;
+const RELAX_CAPTION_STYLES = [
+  { key: "sign", label: "🪧 Cartello" },
+  { key: "balloon", label: "💬 Fumetto" },
+  { key: "sticker", label: "🎖️ Adesivo" },
+  { key: "ribbon", label: "🎗️ Nastro" },
+];
+let relaxCaptionState = null; // { groupKey, identifier, level, baseCanvas, text, style }
+
+function measureFittedFontSize(ctx, label, maxWidth, startSize, minSize) {
+  let fontSize = startSize;
+  ctx.font = `${fontSize}px "Bangers"`;
+  let width = ctx.measureText(label).width;
+  while (width > maxWidth && fontSize > (minSize || 20)) {
+    fontSize -= 3;
+    ctx.font = `${fontSize}px "Bangers"`;
+    width = ctx.measureText(label).width;
+  }
+  return { fontSize, width };
+}
+
+function roundedRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawSignCaption(ctx, canvas, label, maxWidth, startSize) {
+  const paddingX = 36, paddingY = 22;
+  const { fontSize, width: textWidth } = measureFittedFontSize(ctx, label, maxWidth, startSize);
+  const boxWidth = textWidth + paddingX * 2;
+  const boxHeight = fontSize + paddingY * 2;
+  const boxX = (canvas.width - boxWidth) / 2;
+  const boxY = canvas.height - boxHeight - canvas.height * 0.06;
+  const centerX = boxX + boxWidth / 2, centerY = boxY + boxHeight / 2;
+
+  ctx.save();
+  ctx.translate(centerX, centerY); ctx.rotate(-0.035); ctx.translate(-centerX, -centerY);
+  roundedRectPath(ctx, boxX, boxY, boxWidth, boxHeight, 18);
+  ctx.fillStyle = "#FFC93C"; ctx.fill();
+  ctx.lineWidth = Math.max(4, Math.round(canvas.width * 0.006));
+  ctx.strokeStyle = "#1B1B1F"; ctx.stroke();
+  ctx.fillStyle = "#1B1B1F";
+  ctx.font = `${fontSize}px "Bangers"`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(label, centerX, centerY + fontSize * 0.06);
+  ctx.restore();
+}
+
+function drawBalloonCaption(ctx, canvas, label, maxWidth, startSize) {
+  const paddingX = 34, paddingY = 20;
+  const { fontSize, width: textWidth } = measureFittedFontSize(ctx, label, maxWidth, startSize);
+  const boxWidth = textWidth + paddingX * 2;
+  const boxHeight = fontSize + paddingY * 2;
+  const boxX = (canvas.width - boxWidth) / 2;
+  const boxY = canvas.height - boxHeight - canvas.height * 0.16;
+  const centerX = boxX + boxWidth / 2;
+  const tailW = 26;
+  const lineWidth = Math.max(4, Math.round(canvas.width * 0.006));
+
+  // codino
+  ctx.beginPath();
+  ctx.moveTo(centerX - tailW / 2, boxY + boxHeight - 6);
+  ctx.lineTo(centerX + tailW / 2, boxY + boxHeight - 6);
+  ctx.lineTo(centerX, boxY + boxHeight + 36);
+  ctx.closePath();
+  ctx.fillStyle = "#FFF8F0"; ctx.fill();
+  ctx.lineWidth = lineWidth; ctx.strokeStyle = "#1B1B1F"; ctx.stroke();
+
+  // corpo del fumetto
+  roundedRectPath(ctx, boxX, boxY, boxWidth, boxHeight, boxHeight / 2);
+  ctx.fillStyle = "#FFF8F0"; ctx.fill();
+  ctx.lineWidth = lineWidth; ctx.strokeStyle = "#1B1B1F"; ctx.stroke();
+
+  ctx.fillStyle = "#1B1B1F";
+  ctx.font = `${fontSize}px "Bangers"`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(label, centerX, boxY + boxHeight / 2 + fontSize * 0.06);
+}
+
+function drawStickerCaption(ctx, canvas, label, maxWidth, startSize) {
+  const { fontSize, width: textWidth } = measureFittedFontSize(ctx, label, maxWidth * 0.85, Math.round(startSize * 0.85));
+  const rx = textWidth / 2 + 34, ry = fontSize / 2 + 26;
+  const centerX = canvas.width - rx - canvas.width * 0.06;
+  const centerY = ry + canvas.height * 0.07;
+  const lineWidth = Math.max(4, Math.round(canvas.width * 0.006));
+
+  ctx.save();
+  ctx.translate(centerX, centerY); ctx.rotate(0.12); ctx.translate(-centerX, -centerY);
+  ctx.beginPath(); ctx.ellipse(centerX, centerY, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#FF3D7F"; ctx.fill();
+  ctx.lineWidth = lineWidth; ctx.strokeStyle = "#1B1B1F"; ctx.stroke();
+  ctx.setLineDash([6, 7]); ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.ellipse(centerX, centerY, rx - 10, ry - 8, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = "#FFF8F0"; ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = "#FFF8F0";
+  ctx.font = `${fontSize}px "Bangers"`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(label, centerX, centerY + fontSize * 0.06);
+  ctx.restore();
+}
+
+function drawRibbonCaption(ctx, canvas, label, maxWidth, startSize) {
+  const ribbonWidth = canvas.width * 1.6;
+  const { fontSize } = measureFittedFontSize(ctx, label, ribbonWidth * 0.55, Math.min(startSize, Math.round(canvas.width * 0.075)));
+  const ribbonHeight = fontSize + 34;
+  const lineWidth = Math.max(4, Math.round(canvas.width * 0.006));
+
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height * 0.16);
+  ctx.rotate(-0.33);
+  ctx.fillStyle = "#2E6DF2";
+  ctx.fillRect(-ribbonWidth / 2, -ribbonHeight / 2, ribbonWidth, ribbonHeight);
+  ctx.lineWidth = lineWidth; ctx.strokeStyle = "#1B1B1F";
+  ctx.strokeRect(-ribbonWidth / 2, -ribbonHeight / 2, ribbonWidth, ribbonHeight);
+  ctx.fillStyle = "#FFF8F0";
+  ctx.font = `${fontSize}px "Bangers"`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(label, 0, ribbonHeight * 0.04);
+  ctx.restore();
+}
+
+async function drawCaptionOnCanvas(sourceCanvas, text, style) {
+  const canvas = document.createElement("canvas");
+  canvas.width = sourceCanvas.width;
+  canvas.height = sourceCanvas.height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(sourceCanvas, 0, 0);
+  if (!text || !text.trim()) return canvas;
+
+  const label = text.trim().toUpperCase();
+  try { await document.fonts.load('64px "Bangers"'); } catch (e) {}
+
+  const maxWidth = canvas.width * 0.82;
+  const startSize = Math.round(canvas.width * 0.09);
+
+  switch (style) {
+    case "balloon": drawBalloonCaption(ctx, canvas, label, maxWidth, startSize); break;
+    case "sticker": drawStickerCaption(ctx, canvas, label, maxWidth, startSize); break;
+    case "ribbon": drawRibbonCaption(ctx, canvas, label, maxWidth, startSize); break;
+    default: drawSignCaption(ctx, canvas, label, maxWidth, startSize);
+  }
+
+  return canvas;
+}
+
+function closeRelaxCaptionModal() {
+  const el = document.getElementById("relax-caption-overlay");
+  if (el) el.remove();
+  relaxCaptionState = null;
+}
+
+async function updateRelaxCaptionPreview() {
+  if (!relaxCaptionState) return;
+  const preview = document.getElementById("relax-caption-preview-canvas");
+  if (!preview) return;
+  const composed = await drawCaptionOnCanvas(relaxCaptionState.baseCanvas, relaxCaptionState.text, relaxCaptionState.style);
+  preview.src = composed.toDataURL("image/png");
+}
+
+function setRelaxCaptionText(text) {
+  if (!relaxCaptionState) return;
+  relaxCaptionState.text = text.slice(0, RELAX_CAPTION_MAX_LENGTH);
+  const input = document.getElementById("relax-caption-input");
+  if (input && input.value !== relaxCaptionState.text) input.value = relaxCaptionState.text;
+  document.querySelectorAll(".relax-caption-preset-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.preset === relaxCaptionState.text);
+  });
+  updateRelaxCaptionPreview();
+}
+
+function setRelaxCaptionStyle(style) {
+  if (!relaxCaptionState) return;
+  relaxCaptionState.style = style;
+  document.querySelectorAll(".relax-caption-style-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.style === style);
+  });
+  updateRelaxCaptionPreview();
+}
+
+async function confirmRelaxCaptionDownload() {
+  if (!relaxCaptionState) return;
+  const { groupKey, identifier, level, baseCanvas, text, style } = relaxCaptionState;
+  const finalCanvas = await drawCaptionOnCanvas(baseCanvas, text, style);
+  triggerCanvasDownload(finalCanvas, groupKey, identifier, level);
+  closeRelaxCaptionModal();
+}
+
+function triggerCanvasDownload(canvas, groupKey, identifier, level) {
+  const link = document.createElement("a");
+  link.download = `${groupKey}-${identifier}-relax-level-${level}.png`;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+
+function openRelaxCaptionModal(groupKey, identifier, level, baseCanvas) {
+  relaxCaptionState = { groupKey, identifier, level, baseCanvas, text: "", style: "sign" };
+
+  const overlay = document.createElement("div");
+  overlay.className = "relax-caption-overlay";
+  overlay.id = "relax-caption-overlay";
+  overlay.innerHTML = `
+    <div class="relax-caption-panel">
+      <div class="relax-caption-title">Aggiungi una scritta?</div>
+      <img class="relax-caption-preview" id="relax-caption-preview-canvas" alt="Anteprima" />
+      <div class="relax-caption-styles">
+        ${RELAX_CAPTION_STYLES.map((s) => `<button type="button" class="relax-caption-style-btn${s.key === "sign" ? " active" : ""}" data-style="${s.key}" onclick="setRelaxCaptionStyle('${s.key}')">${s.label}</button>`).join("")}
+      </div>
+      <div class="relax-caption-presets">
+        ${RELAX_CAPTION_PRESETS.map((p) => `<button type="button" class="relax-caption-preset-btn" data-preset="${escapeHtml(p)}" onclick="setRelaxCaptionText('${p.replace(/'/g, "\\'")}')">${escapeHtml(p)}</button>`).join("")}
+      </div>
+      <input type="text" class="relax-caption-input" id="relax-caption-input" placeholder="Oppure scrivi il tuo testo..." maxlength="${RELAX_CAPTION_MAX_LENGTH}" oninput="setRelaxCaptionText(this.value)" />
+      <div class="relax-caption-actions">
+        <button type="button" onclick="confirmRelaxCaptionDownload()">⬇️ Scarica</button>
+        <button type="button" class="secondary" onclick="triggerCanvasDownload(relaxCaptionState.baseCanvas, relaxCaptionState.groupKey, relaxCaptionState.identifier, relaxCaptionState.level); closeRelaxCaptionModal();">Scarica senza scritta</button>
+        <button type="button" class="relax-caption-close" onclick="closeRelaxCaptionModal()">Annulla</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  updateRelaxCaptionPreview();
+}
+
 async function handleDownloadRelaxImage(groupKey, identifier, level) {
   const item = (RELAX_ITEMS_BY_ID[groupKey] || {})[String(identifier)];
   if (!item) { alert("Dati NFT non disponibili per la ricomposizione."); return; }
 
   try {
     const canvas = await composeRelaxImage(groupKey, identifier, level, item.traits);
-    const link = document.createElement("a");
-    link.download = `${groupKey}-${identifier}-relax-level-${level}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    openRelaxCaptionModal(groupKey, identifier, level, canvas);
   } catch (e) {
     console.error(e);
     alert("Errore nella generazione dell'immagine. Controlla che tutti gli asset siano caricati correttamente.");
