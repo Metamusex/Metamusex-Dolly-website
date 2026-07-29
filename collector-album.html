@@ -1980,7 +1980,7 @@ function renderGroupPages(byGroup, traitsMeta, badgeData) {
 
     const itemsHtml = items.map((item) => {
       const thumb = itemThumbHtml(item, group.icon);
-      const relaxHtml = (relaxConfig && relaxConfig.enabled)
+      const relaxHtml = (relaxConfig && relaxConfig.enabled && relaxConfig.active)
         ? `<div class="relax-widget-container" id="relax-widget-${group.key}-${item.identifier}">${relaxWidgetHtml(group.key, item.identifier)}</div>`
         : "";
       const cardId = relaxConfig ? ` id="owned-card-${group.key}-${item.identifier}"` : "";
@@ -2836,15 +2836,20 @@ function relaxLevelBoxesHtml(groupKey, currentLevel) {
 }
 
 function relaxGalleryCollectionHtml(groupKey, label, currentLevel, downloadIdentifier) {
+  const config = RELAX_COLLECTIONS[groupKey];
   const statusText = currentLevel >= REST_LEVEL_THRESHOLDS_DAYS.length
     ? "Max level reached ✨"
     : currentLevel > 0
       ? `Level ${currentLevel}/${REST_LEVEL_THRESHOLDS_DAYS.length} unlocked`
       : "No level unlocked yet — put an NFT to rest to start.";
+  const pausedNote = (config && !config.active)
+    ? `<div class="relax-gallery-collection-status mono" style="color:#B8860B;">⚙️ This collection's system is still being implemented — resting isn't open yet, check back soon!</div>`
+    : "";
   return `
     <div class="relax-gallery-collection">
       <div class="relax-gallery-collection-title">${escapeHtml(label)}</div>
       <div class="relax-gallery-collection-status mono">${statusText}</div>
+      ${pausedNote}
       ${relaxLevelBoxesHtml(groupKey, currentLevel, downloadIdentifier)}
     </div>`;
 }
@@ -3010,12 +3015,18 @@ const RELAX_COLLECTIONS = {
     slug: "metamusex-summer-vibes",
     assetFolder: "metamusex-summer-vibes",
     enabled: false, // nascosto per ora: tratti non ancora rivelati
+    active: true,
     layerOrder: ["eyes", "body", "mouth", "outfit", "hair", "glasses", "accessories"],
   },
   men: {
     slug: "metamusex-men-official", // slug reale su OpenSea, usato per le chiamate API
     assetFolder: "metamusex-men-official", // nome cartella usato nel repo per gli asset
     enabled: true,
+    // PAUSA TEMPORANEA: i background sono ancora in preparazione.
+    // "active: false" nasconde SOLO i pulsanti Relax sulle card — la pagina
+    // "Create Your Custom NFT" resta visibile con una nota che spiega la pausa.
+    // Rimetti "active: true" quando i background saranno pronti.
+    active: false,
     layerOrder: ["body", "eyes", "clothes", "glasses", "hair-and-hat", "accessory", "mouth"],
   },
 };
@@ -3026,8 +3037,8 @@ const RELAX_ITEMS_BY_ID = {}; // { [groupKey]: { [identifier]: item } }, popolat
 // Livello 1: 3gg totali | Livello 2: 3+6=9gg | Livello 3: 9+20=29gg | Livello 4: 29+35=64gg
 // *** MODALITÀ TEST ATTIVA: 2 minuti per livello invece dei giorni reali ***
 // Per tornare alla versione reale, sostituisci la riga sotto con:
-// const REST_LEVEL_DURATIONS_DAYS = [3, 6, 20, 35];
-const REST_LEVEL_DURATIONS_DAYS = [2 / 1440, 2 / 1440, 2 / 1440, 2 / 1440]; // 2 min, 2 min, 2 min, 2 min
+// const REST_LEVEL_DURATIONS_DAYS = [2 / 1440, 2 / 1440, 2 / 1440, 2 / 1440]; // valori di TEST usati in precedenza (2 min per livello)
+const REST_LEVEL_DURATIONS_DAYS = [3, 9, 18, 30]; // -> soglie totali: 3, 12, 30, 60 giorni
 const REST_LEVEL_THRESHOLDS_DAYS = REST_LEVEL_DURATIONS_DAYS.reduce((acc, d) => {
   const prev = acc.length ? acc[acc.length - 1] : 0;
   acc.push(prev + d);
