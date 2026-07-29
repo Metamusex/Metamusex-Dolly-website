@@ -362,14 +362,7 @@
       <button type="button" id="leaderboardBtn" class="secondary">👑 Leaderboard</button>
     </div>
 
-    <div class="progress-section panel" style="margin-top: 24px;">
-      <div class="progress-label mono">Collector Rank</div>
-      <div class="ticket-strip" id="ticketStrip"></div>
-      <div class="progress-percent mono" id="progressPercent">0%</div>
-      <div class="display" id="collectorRankTitle" style="font-size: 26px; color: var(--purple); margin-top: 4px; text-shadow: 2px 2px 0 var(--ink);"></div>
-      <div id="loyaltyChip"></div>
-      <div style="margin-top: 10px;"><span class="mono" style="font-size: 12px; text-decoration: underline; cursor: pointer; color: #6b6b70;" onclick="showBadgeGuidePage()">How is this calculated?</span></div>
-    </div>
+    <div id="loyaltyChip" style="text-align:center; margin-top:14px;"></div>
 
     <div id="mainView">
       <div class="section-title">MetaMuseX Album <div class="bar"></div></div>
@@ -720,10 +713,10 @@ const albumGrid = document.getElementById("albumGrid");
 const traitViewsEl = document.getElementById("traitViews");
 const mainView = document.getElementById("mainView");
 const badgeRow = document.getElementById("badgeRow");
-const ticketStrip = document.getElementById("ticketStrip");
-const progressPercent = document.getElementById("progressPercent");
-const collectorRankTitle = document.getElementById("collectorRankTitle");
-const loyaltyChip = document.getElementById("loyaltyChip");
+// ticketStrip, progressPercent, collectorRankTitle, loyaltyChip: ora cercati
+// dinamicamente dentro renderProgress()/renderLoyalty(), perché il blocco
+// Collector Rank vive nella pagina Collector Profile (renderizzata solo
+// quando l'utente la apre), non più in modo fisso nella pagina principale.
 const statsBtn = document.getElementById("statsBtn");
 const airdropBtn = document.getElementById("airdropBtn");
 const badgeGuideBtn = document.getElementById("badgeGuideBtn");
@@ -1066,7 +1059,7 @@ function roundRectPath(ctx, x, y, w, h, r) {
 }
 
 function buildStatsShareCanvas(data, earned, totalBadges) {
-  const W = 1200, H = 630;
+  const W = 1200, H = 700;
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
@@ -1143,10 +1136,39 @@ function buildStatsShareCanvas(data, earned, totalBadges) {
     ctx.textAlign = "left";
   });
 
+  // Collector Rank: percentuale, barra di avanzamento e nome del livello
+  const rankPct = computeCollectorRankPct(data);
+  const rankTitle = getCollectorRank(rankPct).title;
+  const rankY = 372, rankH = 70, rankW = cardW * 4 + gap * 3;
+  ctx.fillStyle = "#FFF8F0";
+  roundRectPath(ctx, 60, rankY, rankW, rankH, 14);
+  ctx.fill();
+  ctx.strokeStyle = "#1B1B1F";
+  ctx.lineWidth = 3;
+  roundRectPath(ctx, 60, rankY, rankW, rankH, 14);
+  ctx.stroke();
+  ctx.fillStyle = "#6b6b70";
+  ctx.font = "700 12px 'Space Mono', monospace";
+  ctx.fillText("COLLECTOR RANK", 84, rankY + 24);
+  ctx.fillStyle = "#8B5CF6";
+  ctx.font = "26px 'Bangers', cursive";
+  ctx.fillText(`${rankTitle} \u2014 ${rankPct}%`, 84, rankY + 50);
+  const barX = 84, barY = rankY + 56, barW = rankW - 48, barH = 10;
+  ctx.fillStyle = "#EDE7DA";
+  roundRectPath(ctx, barX, barY, barW, barH, 5);
+  ctx.fill();
+  ctx.fillStyle = "#FF3D7F";
+  roundRectPath(ctx, barX, barY, Math.max(8, barW * (rankPct / 100)), barH, 5);
+  ctx.fill();
+  ctx.strokeStyle = "#1B1B1F";
+  ctx.lineWidth = 2;
+  roundRectPath(ctx, barX, barY, barW, barH, 5);
+  ctx.stroke();
+
   // Pezzo più raro (se disponibile)
   const rarest = getRarestOwnedPiece(data);
   if (rarest) {
-    const ry = 400, rw = cardW * 4 + gap * 3, rh = 92;
+    const ry = 470, rw = cardW * 4 + gap * 3, rh = 92;
     ctx.fillStyle = "#F1ECE2";
     roundRectPath(ctx, 60, ry, rw, rh, 14);
     ctx.fill();
@@ -1740,9 +1762,10 @@ function recordVisitDay(address) {
 }
 
 function renderLoyalty(visitDays) {
-  if (!loyaltyChip) return;
+  const loyaltyChipEl = document.getElementById("loyaltyChip");
+  if (!loyaltyChipEl) return;
   const tier = getLoyaltyTier(visitDays);
-  loyaltyChip.innerHTML = `<div class="loyalty-chip">${tier.icon} ${tier.label} &middot; visited ${visitDays} day${visitDays === 1 ? "" : "s"}</div>`;
+  loyaltyChipEl.innerHTML = `<div class="loyalty-chip">${tier.icon} ${tier.label} &middot; visited ${visitDays} day${visitDays === 1 ? "" : "s"}</div>`;
 }
 
 function checkRankLevelUp(address, overallPct) {
@@ -2124,24 +2147,32 @@ function hideTraitPages() {
   document.querySelectorAll(".trait-page").forEach((p) => p.classList.remove("active"));
 }
 
-function renderProgress(data) {
+function computeCollectorRankPct(data) {
   const total = ALBUM_GROUPS.length;
   let sum = 0;
-  ticketStrip.innerHTML = "";
+  ALBUM_GROUPS.forEach((group) => { sum += groupCompletionPct(data, group); });
+  return total > 0 ? Math.round(sum / total) : 0;
+}
+
+function renderProgress(data) {
+  const ticketStripEl = document.getElementById("ticketStrip");
+  const progressPercentEl = document.getElementById("progressPercent");
+  const collectorRankTitleEl = document.getElementById("collectorRankTitle");
+  if (!ticketStripEl || !progressPercentEl) return;
+  ticketStripEl.innerHTML = "";
   ALBUM_GROUPS.forEach((group) => {
     const pct = groupCompletionPct(data, group);
-    sum += pct;
     const t = document.createElement("div");
     t.className = "ticket" + (pct >= 100 ? " filled" : "");
     if (pct > 0 && pct < 100) {
       t.style.background = `linear-gradient(90deg, var(--pink) ${pct}%, transparent ${pct}%), repeating-linear-gradient(90deg, var(--grey), var(--grey) 6px, transparent 6px, transparent 9px)`;
     }
     t.title = `${group.label}: ${pct}%`;
-    ticketStrip.appendChild(t);
+    ticketStripEl.appendChild(t);
   });
-  const overallPct = total > 0 ? Math.round(sum / total) : 0;
-  progressPercent.textContent = overallPct + "%";
-  if (collectorRankTitle) collectorRankTitle.textContent = getCollectorRank(overallPct).title;
+  const overallPct = computeCollectorRankPct(data);
+  progressPercentEl.textContent = overallPct + "%";
+  if (collectorRankTitleEl) collectorRankTitleEl.textContent = getCollectorRank(overallPct).title;
 }
 
 function countChainsOwned(data) {
@@ -2508,6 +2539,8 @@ function buildStatsPageHtml(data) {
   const avatarHtml = profile.avatarImage
     ? `<img src="${escapeHtml(profile.avatarImage.url)}" alt="avatar" />`
     : escapeHtml(profile.avatarEmoji);
+  const rankPct = computeCollectorRankPct(data);
+  const rankTitle = getCollectorRank(rankPct).title;
 
   return `
     <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
@@ -2522,6 +2555,14 @@ function buildStatsPageHtml(data) {
         </div>
         <div class="mono" style="font-size:11px; color:#6b6b70; margin-top:8px;">${shortAddress(currentAddress)} &middot; click the avatar to change it</div>
       </div>
+    </div>
+    <div class="panel" style="margin-top:16px;">
+      <div class="progress-label mono">Collector Rank</div>
+      <div style="height:14px; background:var(--grey); border:2px solid var(--ink); border-radius:999px; overflow:hidden; margin:8px 0;">
+        <div style="height:100%; width:${rankPct}%; background:var(--pink);"></div>
+      </div>
+      <div class="mono" style="font-size:13px;">${rankPct}% &middot; <strong style="color:var(--purple);">${escapeHtml(rankTitle)}</strong></div>
+      <div style="margin-top:6px;"><span class="mono" style="font-size:12px; text-decoration:underline; cursor:pointer; color:#6b6b70;" onclick="showBadgeGuidePage()">How is this calculated?</span></div>
     </div>
     <div class="stat-cards">
       <div class="stat-card"><div class="stat-value display">${data.totalOwnedItems}</div><div class="stat-label mono">Items Owned</div></div>
@@ -3038,7 +3079,9 @@ const RELAX_ITEMS_BY_ID = {}; // { [groupKey]: { [identifier]: item } }, popolat
 // *** MODALITÀ TEST ATTIVA: 2 minuti per livello invece dei giorni reali ***
 // Per tornare alla versione reale, sostituisci la riga sotto con:
 // const REST_LEVEL_DURATIONS_DAYS = [2 / 1440, 2 / 1440, 2 / 1440, 2 / 1440]; // valori di TEST usati in precedenza (2 min per livello)
-const REST_LEVEL_DURATIONS_DAYS = [3, 9, 18, 30]; // -> soglie totali: 3, 12, 30, 60 giorni
+// const REST_LEVEL_DURATIONS_DAYS = [3, 9, 18, 30]; // versione precedente a 4 livelli (soglie: 3, 12, 30, 60 giorni)
+const REST_LEVEL_DURATIONS_DAYS = [3, 7, 10, 15, 20, 25, 30, 40];
+// -> soglie totali cumulative: 3, 10, 20, 35, 55, 80, 110, 150 giorni (~5 mesi per il livello massimo)
 const REST_LEVEL_THRESHOLDS_DAYS = REST_LEVEL_DURATIONS_DAYS.reduce((acc, d) => {
   const prev = acc.length ? acc[acc.length - 1] : 0;
   acc.push(prev + d);
@@ -3047,7 +3090,7 @@ const REST_LEVEL_THRESHOLDS_DAYS = REST_LEVEL_DURATIONS_DAYS.reduce((acc, d) => 
 
 const RELAX_ASSET_BASE = "assets/relax";
 
-const RELAX_LEVEL_COLORS = ["var(--grey)", "var(--blue)", "#22C55E", "var(--pink)", "var(--yellow)"];
+const RELAX_LEVEL_COLORS = ["var(--grey)", "var(--blue)", "#22C55E", "var(--purple)", "var(--pink)", "#F97316", "#14B8A6", "#EF4444", "var(--yellow)"];
 function relaxLevelColor(level) {
   return RELAX_LEVEL_COLORS[Math.max(0, Math.min(level, RELAX_LEVEL_COLORS.length - 1))];
 }
