@@ -122,8 +122,9 @@
   .relax-gallery-collection-status { font-size: 12px; color: #6b6b70; margin-bottom: 12px; }
   .relax-level-boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
   .relax-level-box { border: 3px solid var(--ink); border-radius: 10px; padding: 8px; text-align: center; background: var(--paper); opacity: 0.6; }
-  .relax-level-box.unlocked { opacity: 1; cursor: pointer; }
+  .relax-level-box.unlocked { opacity: 1; }
   .relax-level-box-preview { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 6px; display: block; background: var(--grey); }
+  .relax-level-box-mystery { display: flex; align-items: center; justify-content: center; font-family: 'Bangers', cursive; font-size: 28px; color: #6b6b70; }
   .relax-level-box-locked-preview { display: flex; align-items: center; justify-content: center; font-size: 22px; }
   .relax-level-box-num { font-weight: 700; font-size: 13px; margin-top: 6px; }
   .relax-level-box-label { font-size: 12px; }
@@ -2814,22 +2815,20 @@ function getAllRestEntriesForCollection(address, groupKey) {
   return entries;
 }
 
-function relaxLevelBoxesHtml(groupKey, currentLevel, downloadIdentifier) {
+function relaxLevelBoxesHtml(groupKey, currentLevel) {
   const config = RELAX_COLLECTIONS[groupKey];
   const boxes = REST_LEVEL_THRESHOLDS_DAYS.map((_, i) => i + 1).map((level) => {
     const unlocked = currentLevel >= level;
     const color = relaxLevelColor(level);
     const label = unlocked ? `${relaxLevelUnlocksLabel(groupKey, level)} unlocked` : "Locked";
     const style = `border-color:${color};`;
-    const onclick = unlocked && downloadIdentifier ? `onclick="openGalleryItemDownload('${groupKey}', '${downloadIdentifier}', ${level})"` : "";
     const bgSrc = `${RELAX_ASSET_BASE}/backgrounds/${config.assetFolder}/level-${level}.png`;
     const preview = unlocked
       ? `<img class="relax-level-box-preview" src="${bgSrc}" alt="Level ${level} background" />`
-      : `<div class="relax-level-box-preview relax-level-box-locked-preview">🔒</div>`;
+      : `<div class="relax-level-box-preview relax-level-box-mystery">?</div>`;
     return `
-      <div class="relax-level-box${unlocked ? " unlocked" : ""}" style="${style}" ${onclick}>
+      <div class="relax-level-box${unlocked ? " unlocked" : ""}" style="${style}">
         ${preview}
-        <div class="relax-level-box-num">Level ${level}</div>
         <div class="relax-level-box-label">${escapeHtml(label)}</div>
       </div>`;
   }).join("");
@@ -3037,7 +3036,7 @@ const REST_LEVEL_THRESHOLDS_DAYS = REST_LEVEL_DURATIONS_DAYS.reduce((acc, d) => 
 
 const RELAX_ASSET_BASE = "assets/relax";
 
-const RELAX_LEVEL_COLORS = ["var(--grey)", "var(--blue)", "var(--purple)", "var(--pink)", "var(--yellow)"];
+const RELAX_LEVEL_COLORS = ["var(--grey)", "var(--blue)", "#22C55E", "var(--pink)", "var(--yellow)"];
 function relaxLevelColor(level) {
   return RELAX_LEVEL_COLORS[Math.max(0, Math.min(level, RELAX_LEVEL_COLORS.length - 1))];
 }
@@ -3224,7 +3223,7 @@ function relaxWidgetHtml(groupKey, identifier) {
     return `
       <div class="relax-widget" style="border-top-color: ${levelColor};">
         <div class="relax-status mono">Max level reached ✨</div>
-        <button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${groupKey}', '${identifier}', ${state.currentLevel})">🎨 Customize (Lvl ${state.currentLevel})</button>
+        <button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${groupKey}', '${identifier}', ${state.currentLevel})">Customize</button>
       </div>`;
   }
 
@@ -3238,7 +3237,7 @@ function relaxWidgetHtml(groupKey, identifier) {
     return `
       <div class="relax-widget" style="border-top-color: ${levelColor};">
         <div class="relax-status mono">${state.currentLevel > 0 ? `Level ${state.currentLevel}/${state.maxLevel} reached — paused` : "Not resting"}</div>
-        ${state.currentLevel > 0 ? `<button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${groupKey}', '${identifier}', ${state.currentLevel})">🎨 Customize (Lvl ${state.currentLevel})</button>` : ""}
+        ${state.currentLevel > 0 ? `<button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${groupKey}', '${identifier}', ${state.currentLevel})">Customize</button>` : ""}
         ${relaxBtn}
       </div>`;
   }
@@ -3251,7 +3250,7 @@ function relaxWidgetHtml(groupKey, identifier) {
     <div class="relax-widget" style="border-top-color: ${levelColor};">
       <div class="relax-bar-track"><div class="relax-bar-fill" style="width:${pct}%; background:${levelColor};"></div></div>
       <div class="relax-status mono">Level ${state.currentLevel}/${state.maxLevel} · ${daysLeft}d to next</div>
-      ${state.currentLevel > 0 ? `<button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${groupKey}', '${identifier}', ${state.currentLevel})">🎨 Customize (Lvl ${state.currentLevel})</button>` : ""}
+      ${state.currentLevel > 0 ? `<button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${groupKey}', '${identifier}', ${state.currentLevel})">Customize</button>` : ""}
       <button type="button" class="relax-caption-close" style="align-self:center;" onclick="cancelRest('${groupKey}', '${identifier}')">Remove from rest</button>
     </div>`;
 }
@@ -3777,6 +3776,20 @@ async function setRelaxCaptionLevel(level) {
   updateRelaxCaptionPreview();
 }
 
+function relaxCaptionTextControlsAllowed(style) {
+  // Gli elementi "creatura" (uccellino, dinosauro, razzo) hanno già una loro scritta
+  // incorporata: l'utente non può aggiungerne un'altra sopra.
+  return style && !RELAX_CAPTION_CREATURE_STYLES.includes(style);
+}
+
+function updateRelaxCaptionTextControlsVisibility() {
+  const allowed = relaxCaptionTextControlsAllowed(relaxCaptionState ? relaxCaptionState.style : null);
+  const presets = document.querySelector(".relax-caption-presets");
+  const input = document.getElementById("relax-caption-input");
+  if (presets) presets.style.display = allowed ? "flex" : "none";
+  if (input) input.style.display = allowed ? "block" : "none";
+}
+
 function setRelaxCaptionText(text) {
   if (!relaxCaptionState) return;
   relaxCaptionState.text = text.slice(0, RELAX_CAPTION_MAX_LENGTH);
@@ -3788,12 +3801,21 @@ function setRelaxCaptionText(text) {
   updateRelaxCaptionPreview();
 }
 
+// Click su uno stile: se non è già selezionato lo aggiunge, se è già selezionato lo toglie
+// (torna all'immagine senza nessun elemento sopra).
 function setRelaxCaptionStyle(style) {
   if (!relaxCaptionState) return;
-  relaxCaptionState.style = style;
+  relaxCaptionState.style = relaxCaptionState.style === style ? null : style;
+  if (!relaxCaptionTextControlsAllowed(relaxCaptionState.style)) {
+    relaxCaptionState.text = "";
+    const input = document.getElementById("relax-caption-input");
+    if (input) input.value = "";
+    document.querySelectorAll(".relax-caption-preset-btn").forEach((btn) => btn.classList.remove("active"));
+  }
   document.querySelectorAll(".relax-caption-style-btn").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.style === style);
+    btn.classList.toggle("active", btn.dataset.style === relaxCaptionState.style);
   });
+  updateRelaxCaptionTextControlsVisibility();
   updateRelaxCaptionPreview();
 }
 
@@ -3813,7 +3835,7 @@ function triggerCanvasDownload(canvas, groupKey, identifier, level) {
 }
 
 function openRelaxCaptionModal(groupKey, identifier, level, maxUnlocked, baseCanvas) {
-  relaxCaptionState = { groupKey, identifier, level, maxUnlocked, baseCanvas, text: "", style: "sign" };
+  relaxCaptionState = { groupKey, identifier, level, maxUnlocked, baseCanvas, text: "", style: null };
 
   const levelButtons = Array.from({ length: maxUnlocked }, (_, i) => i + 1)
     .map((l) => `<button type="button" class="relax-caption-level-btn${l === level ? " active" : ""}" data-level="${l}" onclick="setRelaxCaptionLevel(${l})">Level ${l}</button>`)
@@ -3828,7 +3850,7 @@ function openRelaxCaptionModal(groupKey, identifier, level, maxUnlocked, baseCan
       <img class="relax-caption-preview" id="relax-caption-preview-canvas" alt="Preview" />
       ${maxUnlocked > 1 ? `<div class="relax-caption-levels">${levelButtons}</div>` : ""}
       <div class="relax-caption-styles">
-        ${RELAX_CAPTION_STYLES.map((s) => `<button type="button" class="relax-caption-style-btn${s.key === "sign" ? " active" : ""}" data-style="${s.key}" onclick="setRelaxCaptionStyle('${s.key}')">${s.label}</button>`).join("")}
+        ${RELAX_CAPTION_STYLES.map((s) => `<button type="button" class="relax-caption-style-btn" data-style="${s.key}" onclick="setRelaxCaptionStyle('${s.key}')">${s.label}</button>`).join("")}
       </div>
       <div class="relax-caption-presets">
         ${RELAX_CAPTION_PRESETS.map((p) => `<button type="button" class="relax-caption-preset-btn" data-preset="${escapeHtml(p)}" onclick="setRelaxCaptionText('${p.replace(/'/g, "\\'")}')">${escapeHtml(p)}</button>`).join("")}
@@ -3841,6 +3863,7 @@ function openRelaxCaptionModal(groupKey, identifier, level, maxUnlocked, baseCan
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  updateRelaxCaptionTextControlsVisibility();
   updateRelaxCaptionPreview();
 }
 
