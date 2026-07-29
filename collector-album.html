@@ -3579,41 +3579,80 @@ function drawBirdCaption(ctx, canvas, label) {
 }
 
 function drawDinoCaption(ctx, canvas, label) {
-  const scale = (canvas.width / 1000) * 5.2;
-  const x = canvas.width * 0.22, y = canvas.height * 0.995;
+  const scale = (canvas.width / 1000) * 5.5;
+  const x = canvas.width * 0.3, y = canvas.height * 0.99;
+  const darkGreen = "#3B6D11", green = "#639922", lightGreen = "#97C459";
 
   ctx.save();
   ctx.translate(x, y); ctx.scale(scale, scale);
-  ctx.lineWidth = 5; ctx.strokeStyle = "#1B1B1F";
+  ctx.lineWidth = 3.5; ctx.strokeStyle = "#1B1B1F";
 
+  // coda
   ctx.beginPath();
-  ctx.moveTo(-32, 42);
-  ctx.quadraticCurveTo(-36, -8, -12, -28);
-  ctx.quadraticCurveTo(8, -46, 30, -30);
-  ctx.quadraticCurveTo(20, -18, 26, -4);
-  ctx.quadraticCurveTo(30, 12, 42, 42);
+  ctx.moveTo(16, 8); ctx.quadraticCurveTo(32, 2, 46, -12);
+  ctx.quadraticCurveTo(34, -4, 22, 4);
   ctx.closePath();
-  ctx.fillStyle = "#8B5CF6"; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = green; ctx.fill(); ctx.stroke();
 
+  // gambe
   ctx.beginPath();
-  [[-18, -20], [-6, -30], [8, -36]].forEach(([sx, sy], i) => {
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(sx + 6, sy - 12);
-    ctx.lineTo(sx + 12, sy);
-  });
-  ctx.fillStyle = "#8B5CF6"; ctx.fill(); ctx.stroke();
-
-  ctx.beginPath(); ctx.arc(9, -22, 6, 0, Math.PI * 2);
-  ctx.fillStyle = "#FFF8F0"; ctx.fill(); ctx.lineWidth = 2; ctx.stroke();
-  ctx.beginPath(); ctx.arc(10.5, -22, 2.6, 0, Math.PI * 2); ctx.fillStyle = "#1B1B1F"; ctx.fill();
-
+  ctx.moveTo(-8, 10); ctx.lineTo(-12, 36); ctx.lineTo(-2, 36); ctx.lineTo(2, 12); ctx.closePath();
+  ctx.fillStyle = darkGreen; ctx.fill(); ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(20, -6); ctx.lineTo(26, 2); ctx.lineTo(22, 4); ctx.lineTo(27, 8); ctx.lineTo(20, 10);
-  ctx.strokeStyle = "#1B1B1F"; ctx.lineWidth = 3; ctx.stroke();
+  ctx.moveTo(6, 10); ctx.lineTo(4, 36); ctx.lineTo(14, 36); ctx.lineTo(14, 12); ctx.closePath();
+  ctx.fillStyle = darkGreen; ctx.fill(); ctx.stroke();
+
+  // corpo eretto
+  ctx.beginPath();
+  ctx.moveTo(-16, 12);
+  ctx.quadraticCurveTo(-22, -16, -6, -32);
+  ctx.quadraticCurveTo(2, -40, 10, -36);
+  ctx.quadraticCurveTo(4, -22, 8, -8);
+  ctx.quadraticCurveTo(12, 2, 18, 12);
+  ctx.closePath();
+  ctx.fillStyle = green; ctx.fill(); ctx.stroke();
+
+  // pancia più chiara
+  ctx.beginPath();
+  ctx.ellipse(-4, -8, 8, 18, 0.2, 0, Math.PI * 2);
+  ctx.fillStyle = lightGreen; ctx.fill();
+
+  // braccino
+  ctx.beginPath();
+  ctx.moveTo(6, -16); ctx.lineTo(18, -12); ctx.lineTo(16, -7); ctx.lineTo(5, -9); ctx.closePath();
+  ctx.fillStyle = darkGreen; ctx.fill(); ctx.stroke();
+
+  // testa grande
+  ctx.beginPath();
+  ctx.moveTo(-8, -32);
+  ctx.quadraticCurveTo(-10, -48, 6, -50);
+  ctx.quadraticCurveTo(24, -50, 32, -40);
+  ctx.quadraticCurveTo(34, -33, 24, -31);
+  ctx.quadraticCurveTo(18, -27, 10, -29);
+  ctx.quadraticCurveTo(0, -31, -8, -32);
+  ctx.closePath();
+  ctx.fillStyle = green; ctx.fill(); ctx.stroke();
+
+  // fauci aperte
+  ctx.beginPath();
+  ctx.moveTo(9, -32); ctx.lineTo(29, -34); ctx.lineTo(26, -23); ctx.lineTo(9, -23); ctx.closePath();
+  ctx.fillStyle = "#7A2E1E"; ctx.fill(); ctx.stroke();
+
+  // dentini
+  ctx.beginPath();
+  ctx.moveTo(12, -32); ctx.lineTo(14, -27); ctx.lineTo(16, -32);
+  ctx.moveTo(19, -33); ctx.lineTo(21, -28); ctx.lineTo(23, -33);
+  ctx.closePath();
+  ctx.fillStyle = "#FFF8F0"; ctx.fill();
+
+  // occhio
+  ctx.beginPath(); ctx.arc(15, -42, 3.4, 0, Math.PI * 2);
+  ctx.fillStyle = "#1B1B1F"; ctx.fill();
+
   ctx.restore();
 
   const fontSize = Math.max(22, Math.round(canvas.width * 0.05));
-  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.dino, x + 58 * scale, y - 90 * scale, "right", fontSize);
+  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.dino, x + 26 * scale, y - 62 * scale, "right", fontSize);
 }
 
 function drawFlowerShape(ctx, x, y, scale) {
@@ -3867,13 +3906,34 @@ function openRelaxCaptionModal(groupKey, identifier, level, maxUnlocked, baseCan
   updateRelaxCaptionPreview();
 }
 
+function showRelaxLoadingOverlay() {
+  if (document.getElementById("relax-loading-overlay")) return;
+  const el = document.createElement("div");
+  el.id = "relax-loading-overlay";
+  el.className = "relax-caption-overlay";
+  el.innerHTML = `
+    <div class="relax-caption-panel" style="text-align:center;">
+      <div class="relax-caption-title">Loading your image…</div>
+      <div class="mono" style="font-size:13px; color:#6b6b70;">This can take a few seconds — please wait, it's working!</div>
+    </div>`;
+  document.body.appendChild(el);
+}
+
+function hideRelaxLoadingOverlay() {
+  const el = document.getElementById("relax-loading-overlay");
+  if (el) el.remove();
+}
+
 async function handleDownloadRelaxImage(groupKey, identifier, level) {
   const config = RELAX_COLLECTIONS[groupKey];
   const item = (RELAX_ITEMS_BY_ID[groupKey] || {})[String(identifier)];
   if (!item) { alert("NFT data not available to rebuild the image."); return; }
 
+  showRelaxLoadingOverlay();
+
   const listed = await isNftListedForSale(config.slug, identifier);
   if (listed) {
+    hideRelaxLoadingOverlay();
     alert("This NFT is currently listed for sale, so it can't be customized right now. Remove the listing to continue.");
     return;
   }
@@ -3883,9 +3943,11 @@ async function handleDownloadRelaxImage(groupKey, identifier, level) {
 
   try {
     const canvas = await composeRelaxImage(groupKey, identifier, level, item.traits);
+    hideRelaxLoadingOverlay();
     openRelaxCaptionModal(groupKey, identifier, level, maxUnlocked, canvas);
   } catch (e) {
     console.error(e);
+    hideRelaxLoadingOverlay();
     alert("Error generating the image. Check that all assets are uploaded correctly.");
   }
 }
