@@ -454,6 +454,17 @@
   </div>
 </div>
 
+<div id="relaxLevelUpOverlay" class="badge-unlock-overlay" style="display:none;">
+  <div class="badge-unlock-modal panel">
+    <div class="badge-unlock-title display">Relax Level Up! 😌</div>
+    <div id="relaxLevelUpIcon" style="font-size: 50px; margin-bottom: 8px;">✨</div>
+    <div id="relaxLevelUpText" class="display" style="font-size: 24px; color: var(--pink); margin-bottom: 20px; text-shadow: 2px 2px 0 var(--ink);"></div>
+    <div class="badge-unlock-actions">
+      <button type="button" id="relaxLevelUpCloseBtn">Nice!</button>
+    </div>
+  </div>
+</div>
+
 <div id="avatarPickerOverlay" class="badge-unlock-overlay" style="display:none;">
   <div class="badge-unlock-modal panel" style="max-width:480px;">
     <div class="badge-unlock-title display" style="font-size:26px;">Choose Your Avatar</div>
@@ -810,6 +821,7 @@ leaderboardBtn.addEventListener("click", showLeaderboardPage);
 document.getElementById("badgeUnlockCloseBtn").addEventListener("click", hideBadgeUnlockPopup);
 document.getElementById("badgeUnlockShareBtn").addEventListener("click", shareUnlockedBadgesOnX);
 document.getElementById("levelUpCloseBtn").addEventListener("click", hideLevelUpPopup);
+document.getElementById("relaxLevelUpCloseBtn").addEventListener("click", hideRelaxLevelUpPopup);
 document.getElementById("wcCloseBtn").addEventListener("click", () => hideWalletConnectModal(true));
 document.getElementById("wcCopyBtn").addEventListener("click", copyWalletConnectUri);
 document.getElementById("avatarPickerCloseBtn").addEventListener("click", hideAvatarPicker);
@@ -1654,6 +1666,7 @@ async function loadAlbum(address) {
   renderLoyalty(visitDays);
   renderBadges(badgeData);
   pruneListedExtraSlots(address); // in background, non blocca il caricamento
+  checkRelaxLevelUps(address);
   loadSeriesImages(byGroup);
   loadSpecialFullCollections(byGroup);
 
@@ -2771,14 +2784,15 @@ function describeGeneralBadge(label) {
 function describeGroupBadge(group, name) {
   if (group.special) {
     if (name === "Completionist" || name === "Master") {
-      const found = COLLECTION_BADGE_GUIDE.find((b) => b.name.indexOf("Master (special") === 0);
+      const found = COLLECTION_BADGE_GUIDE.find((b) => b.key === "master-special");
       return found ? found.desc : "";
     }
-    const found = COLLECTION_BADGE_GUIDE.find((b) => b.name.indexOf("Series badges") === 0);
+    const found = COLLECTION_BADGE_GUIDE.find((b) => b.key === "series-special");
     return found ? found.desc : "";
   }
   if (name === "Completionist" || name === "Full Completion" || name === "Rare Find") {
-    const found = COLLECTION_BADGE_GUIDE.find((b) => b.name === name);
+    const keyByName = { "Completionist": "completionist", "Full Completion": "full-completion", "Rare Find": "rare-find" };
+    const found = COLLECTION_BADGE_GUIDE.find((b) => b.key === keyByName[name]);
     return found ? found.desc : "";
   }
   if (/ Master$/.test(name)) {
@@ -2892,21 +2906,21 @@ function renderLeaderboardPage(sortKey) {
 }
 
 const GENERAL_BADGE_GUIDE = [
-  { icon: "🏅", name: "Early Supporter", desc: "Own NFTs from at least 2 MetaMuseX/Dolly collections." },
-  { icon: "🥈", name: "Top Buyer", desc: "Own NFTs from at least 4 MetaMuseX/Dolly collections." },
-  { icon: "⭐", name: "OG Holder", desc: "Own NFTs from at least 5 MetaMuseX/Dolly collections." },
-  { icon: "💎", name: "Diamond Collector", desc: "Own NFTs from every MetaMuseX/Dolly collection." },
-  { icon: "🌉", name: "Multi-Chain", desc: "Own NFTs across at least 2 different blockchains." },
-  { icon: "🐋", name: "Rare Collector", desc: "Own at least 5 distinct NFTs that each have an ultra-rare trait value (held by very few pieces across the whole collection)." },
+  { icon: "🏅", name: "Early Supporter", question: "How do I get the Early Supporter badge?", desc: "Own NFTs from at least 2 MetaMuseX/Dolly collections.", descHtml: "Own NFTs from at least <strong>2</strong> MetaMuseX/Dolly collections." },
+  { icon: "🥈", name: "Top Buyer", question: "How do I get the Top Buyer badge?", desc: "Own NFTs from at least 4 MetaMuseX/Dolly collections.", descHtml: "Own NFTs from at least <strong>4</strong> MetaMuseX/Dolly collections." },
+  { icon: "⭐", name: "OG Holder", question: "How do I get the OG Holder badge?", desc: "Own NFTs from at least 5 MetaMuseX/Dolly collections.", descHtml: "Own NFTs from at least <strong>5</strong> MetaMuseX/Dolly collections." },
+  { icon: "💎", name: "Diamond Collector", question: "How do I get the Diamond Collector badge?", desc: "Own NFTs from every MetaMuseX/Dolly collection.", descHtml: "Own NFTs from <strong>every</strong> MetaMuseX/Dolly collection." },
+  { icon: "🌉", name: "Multi-Chain", question: "How do I get the Multi-Chain badge?", desc: "Own NFTs across at least 2 different blockchains.", descHtml: "Own NFTs across at least <strong>2</strong> different blockchains." },
+  { icon: "🐋", name: "Rare Collector", question: "How do I get the Rare Collector badge?", desc: "Own at least 5 distinct NFTs that each have an ultra-rare trait value (held by very few pieces across the whole collection).", descHtml: "Own at least <strong>5</strong> distinct NFTs that each have an <strong>ultra-rare</strong> trait value (held by very few pieces across the whole collection)." },
 ];
 
 const COLLECTION_BADGE_GUIDE = [
-  { icon: "🐋", name: "Rare Find", desc: `Own an NFT with an ultra-rare trait (held by only ${RARE_TRAIT_MAX_COUNT} piece in the whole collection). For "Men", owning a 1/1 also counts.` },
-  { icon: "🏆", name: "Completionist", desc: "Reach 60% trait completion in that collection." },
-  { icon: "🎖️", name: "Trait Master", desc: "Own every value of one specific trait in that collection." },
-  { icon: "🎉", name: "Full Completion", desc: "Own every trait value that exists in that collection." },
-  { icon: "🥇", name: "Master (no-trait collections)", desc: `For collections without traits: ${SPECIAL_COMPLETIONIST_MIN} pieces = Completionist, ${SPECIAL_MASTER_MIN} pieces = Master.` },
-  { icon: "🥉", name: "Series badges", desc: "For collections with series (like 1/1): 3 pieces = Collector, 5 = Enthusiast, 6+ = Master." },
+  { key: "rare-find", icon: "🐋", name: "Rare Find", question: "How do I get the Rare Find badge?", desc: `Own an NFT with an ultra-rare trait (held by only ${RARE_TRAIT_MAX_COUNT} piece in the whole collection). For "Men", owning a 1/1 also counts.`, descHtml: `Own an NFT with an <strong>ultra-rare</strong> trait (held by only ${RARE_TRAIT_MAX_COUNT} piece in the whole collection). For "Men", owning a <strong>1/1</strong> also counts.` },
+  { key: "completionist", icon: "🏆", name: "Completionist", question: "How do I get the Completionist badge?", desc: "Reach 60% trait completion in that collection.", descHtml: "Reach <strong>60%</strong> trait completion in that collection." },
+  { key: "trait-master", icon: "🎖️", name: "Trait Master", question: "How do I get a Trait Master badge?", desc: "Own every value of one specific trait in that collection.", descHtml: "Own <strong>every value</strong> of one specific trait in that collection." },
+  { key: "full-completion", icon: "🎉", name: "Full Completion", question: "How do I get the Full Completion badge?", desc: "Own every trait value that exists in that collection.", descHtml: "Own <strong>every trait value</strong> that exists in that collection." },
+  { key: "master-special", icon: "🥇", name: "Master (no-trait collections)", question: "How do Completionist and Master work for no-trait collections?", desc: `For collections without traits: ${SPECIAL_COMPLETIONIST_MIN} pieces = Completionist, ${SPECIAL_MASTER_MIN} pieces = Master.`, descHtml: `For collections without traits: <strong>${SPECIAL_COMPLETIONIST_MIN}</strong> pieces = Completionist, <strong>${SPECIAL_MASTER_MIN}</strong> pieces = Master.` },
+  { key: "series-special", icon: "🥉", name: "Series badges", question: "How do Series badges work?", desc: "For collections with series (like 1/1): 3 pieces = Collector, 5 = Enthusiast, 6+ = Master.", descHtml: "For collections with series (like 1/1): <strong>3</strong> pieces = Collector, <strong>5</strong> = Enthusiast, <strong>6+</strong> = Master." },
 ];
 
 function guideCardHtml(icon, name, desc) {
@@ -2922,20 +2936,20 @@ function describeGroupCompletionCriterion(group) {
   if (group.special) {
     const threshold = group.completionThreshold || SPECIAL_MASTER_MIN;
     return threshold <= 1
-      ? "Own at least 1 piece from this collection."
-      : `Own at least ${threshold} pieces from this collection (fewer pieces = partial credit).`;
+      ? "Own at least <strong>1</strong> piece from this collection."
+      : `Own at least <strong>${threshold}</strong> pieces from this collection (fewer pieces = partial credit).`;
   }
   if (group.traitsUnavailable) {
     const threshold = group.completionThreshold || 1;
     return threshold <= 1
-      ? "Own at least 1 piece from this collection."
-      : `Own at least ${threshold} pieces from this collection (fewer pieces = partial credit). Trait tracking isn't reliable for this collection yet, so piece count is used instead.`;
+      ? "Own at least <strong>1</strong> piece from this collection."
+      : `Own at least <strong>${threshold}</strong> pieces from this collection (fewer pieces = partial credit). Trait tracking isn't reliable for this collection yet, so piece count is used instead.`;
   }
-  return "Own at least one piece with every existing trait value in this collection (not every NFT — just every trait value at least once).";
+  return "Own at least one piece with <strong>every existing trait value</strong> in this collection (not every NFT — just every trait value at least once).";
 }
 
 function buildCollectorRankGuideHtml() {
-  const rows = ALBUM_GROUPS.map((g) => guideCardHtml(g.icon, g.label, describeGroupCompletionCriterion(g))).join("");
+  const rows = ALBUM_GROUPS.map((g) => guideCardHtml(g.icon, `How do I complete ${g.label}?`, describeGroupCompletionCriterion(g))).join("");
   const rankRows = COLLECTOR_RANKS.map((r, i) => {
     const nextMin = COLLECTOR_RANKS[i + 1] ? COLLECTOR_RANKS[i + 1].min : null;
     const range = nextMin != null ? `${r.min}–${nextMin - 1}%` : `${r.min}%`;
@@ -2945,10 +2959,11 @@ function buildCollectorRankGuideHtml() {
     <div class="panel" style="padding: 18px 20px; margin-bottom: 20px;">
       <div style="font-weight: 700; margin-bottom: 8px;">What is my Collector Rank?</div>
       <div style="font-size: 14px; line-height: 1.55; margin-bottom: 14px;">
-        Collector Rank is the average completion of every collection below — own every trait value in a collection
-        and it hits 100%. Your title rises as your rank grows, from Rookie up to Legendary Collector. If new
-        collections or badges get added later, there's simply more to collect, so think of it as an ongoing score
-        rather than a one-time 100%.
+        Collector Rank is the <strong>average completion</strong> of every collection below — own every trait value
+        in a collection and it hits <strong>100%</strong>. Your title rises as your rank grows, from
+        <strong>Rookie</strong> up to <strong>Legendary Collector</strong>. If new collections or badges get added
+        later, there's simply more to collect, so think of it as an <strong>ongoing score</strong> rather than a
+        one-time 100%.
       </div>
       <table class="leaderboard-table"><thead><tr><th>Rank %</th><th>Title</th></tr></thead><tbody>${rankRows}</tbody></table>
     </div>
@@ -2958,14 +2973,15 @@ function buildCollectorRankGuideHtml() {
 
 function buildRelaxGuideHtml() {
   const cards = [
-    guideCardHtml("😌", "Put an NFT to rest", "Click \"Relax\" on any owned NFT to start it resting. It must not be listed for sale, and only one NFT per collection can rest at a time."),
-    guideCardHtml("⏳", "Levels take time", "The longer it rests, the more levels unlock. Time never resets, even if you pause."),
-    guideCardHtml("🖼️", "New look per level", "Every level unlocks a new background for your character."),
-    guideCardHtml("⬇️", "Download anytime", "Once a level is unlocked, download an image with that background — add a caption or sticker if you like."),
-    guideCardHtml("↩️", "Pause, keep your level", "Click \"Remove from rest\" anytime — you keep the level reached, and the slot frees up so you can rest a different NFT. Click \"Relax\" again later to keep going."),
-    guideCardHtml("🔒", "Levels 5 and beyond", `From level 5, you also need enough NFTs: ${getNftRequirementForLevel(5)} at level 5, +${EXTRA_NFT_REQUIREMENT_STEP} per level after. No time is lost — it unlocks automatically once you own enough.`),
-    guideCardHtml("🎁", "Bonus slots at level 5", `Reach level ${EXTRA_SLOTS_UNLOCK_LEVEL} and unlock ${EXTRA_SLOTS_COUNT} bonus slots — extra NFTs you can customize instantly at that level, no waiting. Choose carefully: once picked, they can't be changed.`),
-    guideCardHtml("🌈", "Color-coded levels", "Each level has its own color on the NFT's card: grey (none), blue, green, purple, pink, orange, teal, red, gold (max)."),
+    guideCardHtml("😌", "How do I send my NFT on vacation?", "Click <strong>\"Relax\"</strong> on any NFT you own to book it a stay. Two spa rules: it must <strong>not be listed for sale</strong>, and it can only book <strong>one room per collection</strong> at a time."),
+    guideCardHtml("⏳", "How long until I see results?", "The longer it stays, the more treatments unlock. Check-in time <strong>never resets</strong>, even if you call it back to the office halfway through."),
+    guideCardHtml("🖼️", "What does it bring home from vacation?", "Every level unlocks a <strong>new background</strong> — a permanent souvenir for your character."),
+    guideCardHtml("⬇️", "How do I show off how relaxed it is?", "Once it hits level 1, click <strong>\"Customize\"</strong> — on its card or on <strong>\"🎨 Create Your Custom\"</strong> — pick any level it's reached, add a <strong>caption</strong> or <strong>sticker</strong>, and download. Do it <strong>as many times as you like</strong> — it's not a one-time souvenir."),
+    guideCardHtml("🎨", "What's the \"Create Your Custom\" page?", "Think of it as the spa's front desk: see every unlockable background per collection, plus a gallery of every NFT that's already had at least one treatment (bonus NFTs are marked with 🎁), ready for a quick \"Customize\" click."),
+    guideCardHtml("↩️", "Can I call it back from vacation early?", "Sure — click <strong>\"Remove from rest\"</strong> anytime: <strong>the level it reached is yours to keep</strong>, and the room frees up for another NFT to check in. Send it back on vacation whenever you like, and it picks up right where it left off."),
+    guideCardHtml("🔒", "Does level 5 need anything extra?", `Yes — from level 5 on, your NFT needs company: you must also <strong>own enough NFTs</strong> in that collection (<strong>${getNftRequirementForLevel(5)}</strong> at level 5, <strong>+${EXTRA_NFT_REQUIREMENT_STEP}</strong> each level after). No time is wasted — if the clock's ready but you don't own enough yet, the level just waits and unlocks itself the moment you do.`),
+    guideCardHtml("🎁", "What are the VIP guests (bonus slots)?", `Reach level ${EXTRA_SLOTS_UNLOCK_LEVEL} and the spa treats <strong>${EXTRA_SLOTS_COUNT} VIP guests</strong>: ${EXTRA_SLOTS_COUNT} more NFTs that get the same treatment instantly, no waiting in line. Choose wisely — <strong>once picked, they're yours for good</strong>.`),
+    guideCardHtml("🌈", "How do I spot the relax level on a card?", "Every level gets its own wristband color, spa-style: <strong>grey</strong> (none), <strong>blue</strong>, <strong>green</strong>, <strong>purple</strong>, <strong>pink</strong>, <strong>orange</strong>, <strong>teal</strong>, <strong>red</strong>, <strong>gold</strong> (full treatment)."),
   ];
   return `<div class="guide-list">${cards.join("")}</div>`;
 }
@@ -3006,6 +3022,51 @@ function relaxLevelBoxesHtml(groupKey, currentLevel) {
   return `<div class="relax-level-boxes">${boxes}</div>`;
 }
 
+// Card di un NFT personalizzabile nella pagina "Create Your Custom": niente
+// barra di avanzamento (quella si gestisce nella pagina della collezione),
+// solo miniatura + pulsante "Customize" che apre la scelta tra tutti i
+// livelli già sbloccati per quell'NFT (gestita già da handleDownloadRelaxImage).
+function relaxCustomizableNftCardHtml(groupKey, identifier, level, isBonus) {
+  const item = (RELAX_ITEMS_BY_ID[groupKey] || {})[String(identifier)];
+  if (!item) return "";
+  const group = ALBUM_GROUPS.find((g) => g.key === groupKey);
+  const thumb = itemThumbHtml(item, group ? group.icon : "🎨");
+  const color = relaxLevelColor(level);
+  return `
+    <div class="owned-item-card" style="border-color:${color};">
+      ${thumb}
+      <div class="item-name">${escapeHtml(getItemName(item))}${isBonus ? " 🎁" : ""}</div>
+      <div class="relax-widget" style="border-top-color:${color};">
+        <div class="relax-status mono">Level ${level}</div>
+        <button class="relax-btn secondary" onclick="handleDownloadRelaxImage('${groupKey}', '${identifier}', ${level})">Customize</button>
+      </div>
+    </div>`;
+}
+
+// Elenca tutti gli NFT che l'utente può personalizzare in questa collezione:
+// quelli con almeno un livello raggiunto (a riposo o in pausa) più gli
+// eventuali NFT scelti come slot bonus — tutti senza barra di avanzamento,
+// dato che qui si personalizza soltanto, non si gestisce il riposo.
+function relaxCustomizableGridHtml(groupKey) {
+  if (!currentAddress) return "";
+  const entries = getAllRestEntriesForCollection(currentAddress, groupKey).filter((e) => e.state.currentLevel >= 1);
+  const restedIds = new Set(entries.map((e) => String(e.identifier)));
+  const bonusIds = getChosenExtraNfts(currentAddress, groupKey).filter((id) => !restedIds.has(String(id)));
+  const bonusLevel = getCollectionUnlockedLevel(currentAddress, groupKey);
+
+  const cards = [
+    ...entries.map((e) => relaxCustomizableNftCardHtml(groupKey, e.identifier, e.state.currentLevel, false)),
+    ...bonusIds.map((id) => relaxCustomizableNftCardHtml(groupKey, id, bonusLevel, true)),
+  ].filter(Boolean);
+
+  if (cards.length === 0) return "";
+  return `
+    <div style="margin-top:18px;">
+      <div class="mono" style="font-size:12px; color:#6b6b70; margin-bottom:8px;">Your customizable NFTs (pick any unlocked level when you click Customize):</div>
+      <div class="owned-items-grid">${cards.join("")}</div>
+    </div>`;
+}
+
 function relaxGalleryCollectionHtml(groupKey, label, currentLevel, downloadIdentifier) {
   const config = RELAX_COLLECTIONS[groupKey];
   const statusText = currentLevel >= REST_LEVEL_THRESHOLDS_DAYS.length
@@ -3025,6 +3086,7 @@ function relaxGalleryCollectionHtml(groupKey, label, currentLevel, downloadIdent
       <div class="relax-gallery-collection-status mono">${statusText}</div>
       ${relaxLevelBoxesHtml(groupKey, currentLevel, downloadIdentifier)}
       ${extraSlotsHtml}
+      ${relaxCustomizableGridHtml(groupKey)}
     </div>`;
 }
 
@@ -3075,19 +3137,19 @@ function showBadgeGuidePage() {
     <span class="back-link" onclick="hideTraitPages()">&larr; Back to album</span>
     <div class="section-title">Guide <div class="bar"></div></div>
     <div class="trait-block">
-      <div class="trait-block-header"><span class="trait-block-title">How to Reach 100% Collector Rank</span><span class="trait-block-pct mono">Tap to expand <span class="trait-block-chevron">▾</span></span></div>
+      <div class="trait-block-header"><span class="trait-block-title">How do I reach 100% Collector Rank?</span><span class="trait-block-pct mono">Tap to expand <span class="trait-block-chevron">▾</span></span></div>
       <div class="trait-block-content">${buildCollectorRankGuideHtml()}</div>
     </div>
     <div class="trait-block">
-      <div class="trait-block-header"><span class="trait-block-title">General Badges</span><span class="trait-block-pct mono">Tap to expand <span class="trait-block-chevron">▾</span></span></div>
-      <div class="trait-block-content"><div class="guide-list">${GENERAL_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div></div>
+      <div class="trait-block-header"><span class="trait-block-title">What are General Badges?</span><span class="trait-block-pct mono">Tap to expand <span class="trait-block-chevron">▾</span></span></div>
+      <div class="trait-block-content"><div class="guide-list">${GENERAL_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.question, b.descHtml)).join("")}</div></div>
     </div>
     <div class="trait-block">
-      <div class="trait-block-header"><span class="trait-block-title">Collection Badges</span><span class="trait-block-pct mono">Tap to expand <span class="trait-block-chevron">▾</span></span></div>
-      <div class="trait-block-content"><div class="guide-list">${COLLECTION_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.name, b.desc)).join("")}</div></div>
+      <div class="trait-block-header"><span class="trait-block-title">What are Collection Badges?</span><span class="trait-block-pct mono">Tap to expand <span class="trait-block-chevron">▾</span></span></div>
+      <div class="trait-block-content"><div class="guide-list">${COLLECTION_BADGE_GUIDE.map((b) => guideCardHtml(b.icon, b.question, b.descHtml)).join("")}</div></div>
     </div>
     <div class="trait-block">
-      <div class="trait-block-header"><span class="trait-block-title">🎨 Create Your Custom</span><span class="trait-block-pct mono">Tap to expand <span class="trait-block-chevron">▾</span></span></div>
+      <div class="trait-block-header"><span class="trait-block-title">🎨 How does Create Your Custom work?</span><span class="trait-block-pct mono">Tap to expand <span class="trait-block-chevron">▾</span></span></div>
       <div class="trait-block-content">
         <div class="mono" style="font-size:12px; color:#6b6b70; margin-bottom:12px;">This doesn't mint anything — it's just an image you can download and use for fun or on social media. Currently applies to the MetaMuseX Men collection only, with MetaMuseX Summer Vibes coming in the future.</div>
         ${buildRelaxGuideHtml()}
@@ -3301,6 +3363,64 @@ function getCollectionUnlockedLevel(address, groupKey) {
   let max = 0;
   entries.forEach((e) => { if (e.state.currentLevel > max) max = e.state.currentLevel; });
   return max;
+}
+
+// ==========================================================
+// POPUP LIVELLO SBLOCCATO (RELAX) — confronta, ad ogni caricamento
+// dell'album, il livello massimo raggiunto in ciascuna collezione Relax
+// con l'ultimo che ricordava (salvato in localStorage). Se è salito,
+// mostra un popup con coriandoli, indipendente dal "Level Up!" del
+// Collector Rank generale.
+// ==========================================================
+const RELAX_LEVELUP_STORAGE_PREFIX = "metamusex-relax-levelup:";
+
+function getStoredRelaxLevel(address, groupKey) {
+  try {
+    const raw = localStorage.getItem(`${RELAX_LEVELUP_STORAGE_PREFIX}${address.toLowerCase()}:${groupKey}`);
+    return raw ? Number(raw) : 0;
+  } catch (e) { return 0; }
+}
+
+function setStoredRelaxLevel(address, groupKey, level) {
+  try {
+    localStorage.setItem(`${RELAX_LEVELUP_STORAGE_PREFIX}${address.toLowerCase()}:${groupKey}`, String(level));
+  } catch (e) { /* no-op */ }
+}
+
+function checkRelaxLevelUps(address) {
+  const increases = [];
+  Object.keys(RELAX_COLLECTIONS).forEach((groupKey) => {
+    const config = RELAX_COLLECTIONS[groupKey];
+    if (!config.enabled || !config.active) return;
+    const currentMax = getCollectionUnlockedLevel(address, groupKey);
+    const stored = getStoredRelaxLevel(address, groupKey);
+    if (currentMax > stored) increases.push({ groupKey, level: currentMax });
+    setStoredRelaxLevel(address, groupKey, currentMax);
+  });
+  if (increases.length > 0) showRelaxLevelUpPopup(increases);
+}
+
+function showRelaxLevelUpPopup(increases) {
+  const overlay = document.getElementById("relaxLevelUpOverlay");
+  const iconEl = document.getElementById("relaxLevelUpIcon");
+  const textEl = document.getElementById("relaxLevelUpText");
+  const first = increases[0];
+  iconEl.style.color = relaxLevelColor(first.level);
+  if (increases.length === 1) {
+    const group = ALBUM_GROUPS.find((g) => g.key === first.groupKey);
+    textEl.textContent = `${group ? group.label : first.groupKey}: Level ${first.level} unlocked!`;
+  } else {
+    textEl.textContent = increases.map((inc) => {
+      const group = ALBUM_GROUPS.find((g) => g.key === inc.groupKey);
+      return `${group ? group.label : inc.groupKey}: Level ${inc.level}`;
+    }).join(" · ");
+  }
+  overlay.style.display = "flex";
+  fireConfetti();
+}
+
+function hideRelaxLevelUpPopup() {
+  document.getElementById("relaxLevelUpOverlay").style.display = "none";
 }
 
 function extraSlotWidgetHtml(groupKey, identifier) {
@@ -4420,7 +4540,7 @@ function getFaqKnowledgeBase() {
     {
       id: "customize-nft",
       keywords: ["create your custom", "download image", "customize nft", "how do i download", "come scarico l'immagine"],
-      answer: `Once an NFT reaches level 1+ through resting, click "Customize" on its card (or visit "🎨 Create Your Custom") to generate and download an image at any unlocked level, optionally with a caption or decorative sticker. This doesn't mint anything — it's just an image for fun or social media.`,
+      answer: `Once an NFT reaches level 1+ through resting, click "Customize" on its card (either on the collection page or on "🎨 Create Your Custom") to generate and download an image at any unlocked level. You can do this as many times as you want, optionally with a caption or decorative sticker. This doesn't mint anything — it's just an image for fun or social media.`,
     },
   ];
 }
