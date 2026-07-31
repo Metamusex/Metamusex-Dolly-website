@@ -3846,6 +3846,13 @@ async function composeRelaxImage(groupKey, identifier, level, traits, size) {
   canvas.width = size || 1000; canvas.height = size || 1000;
   const ctx = canvas.getContext("2d");
 
+  // Canvas "maschera" che contiene SOLO il personaggio (senza sfondo): serve
+  // solo a rilevare dove si trovano i pixel occupati, per scegliere in
+  // automatico l'angolo più libero dove disegnare didascalie e adesivi.
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = canvas.width; maskCanvas.height = canvas.height;
+  const maskCtx = maskCanvas.getContext("2d", { willReadFrequently: true });
+
   const bgSrc = `${RELAX_ASSET_BASE}/backgrounds/${config.assetFolder}/level-${level}.png`;
   const bgImg = await loadImage(bgSrc);
   ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
@@ -3863,6 +3870,7 @@ async function composeRelaxImage(groupKey, identifier, level, traits, size) {
       try {
         const layerImg = await loadImage(layerSrc);
         ctx.drawImage(layerImg, 0, 0, canvas.width, canvas.height);
+        maskCtx.drawImage(layerImg, 0, 0, maskCanvas.width, maskCanvas.height);
         loaded = true;
         break;
       } catch (e) {}
@@ -3875,34 +3883,117 @@ async function composeRelaxImage(groupKey, identifier, level, traits, size) {
     try {
       const extraImg = await loadImage(extra.path);
       ctx.drawImage(extraImg, 0, 0, canvas.width, canvas.height);
+      maskCtx.drawImage(extraImg, 0, 0, maskCanvas.width, maskCanvas.height);
     } catch (e) {
       console.warn(`Extra del livello ${level} non trovato: ${extra.path}`);
     }
   }
 
+  canvas.zoneOccupancy = computeZoneOccupancy(maskCtx, maskCanvas.width, maskCanvas.height);
   return canvas;
+}
+
+// Analizza il canale alpha del SOLO personaggio (senza sfondo) nei 4 angoli
+// dell'immagine, e restituisce quanto ciascun angolo è "occupato" da pixel
+// non trasparenti (0 = completamente libero, 1 = completamente occupato).
+// Usato per scegliere automaticamente dove posizionare le decorazioni.
+function computeZoneOccupancy(maskCtx, w, h) {
+  const boxW = Math.round(w * 0.32);
+  const boxH = Math.round(h * 0.32);
+  const zones = {
+    topLeft: { sx: 0, sy: 0 },
+    topRight: { sx: w - boxW, sy: 0 },
+    bottomLeft: { sx: 0, sy: h - boxH },
+    bottomRight: { sx: w - boxW, sy: h - boxH },
+  };
+  const occupancy = {};
+  Object.keys(zones).forEach((key) => {
+    const { sx, sy } = zones[key];
+    try {
+      const data = maskCtx.getImageData(sx, sy, boxW, boxH).data;
+      let opaque = 0;
+      let sampled = 0;
+      // campiona 1 pixel ogni 4 per restare veloce anche su canvas grandi
+      for (let i = 3; i < data.length; i += 16) {
+        if (data[i] > 25) opaque++;
+        sampled++;
+      }
+      occupancy[key] = sampled > 0 ? opaque / sampled : 0;
+    } catch (e) {
+      occupancy[key] = 0.5; // in dubbio, valore neutro
+    }
+  });
+  return occupancy;
+}
+
+// Sceglie automaticamente su quale lato (sinistra/destra) posizionare una
+// decorazione ancorata in alto o in basso, confrontando l'occupazione dei
+// due angoli di quella fascia. Cambia lato rispetto a quello di default
+// solo se l'altro è chiaramente più libero (soglia 0.12), per evitare
+// scambi inutili quando l'occupazione è quasi identica sui due lati.
+function chooseDecorationSide(canvas, band, canonicalSide) {
+  const occ = canvas && canvas.zoneOccupancy;
+  const textStyle = canvas && canvas.activeTextStyle;
+  const base = {
+    topLeft: occ && occ.topLeft != null ? occ.topLeft : 0.5,
+    topRight: occ && occ.topRight != null ? occ.topRight : 0.5,
+    bottomLeft: occ && occ.bottomLeft != null ? occ.bottomLeft : 0.5,
+    bottomRight: occ && occ.bottomRight != null ? occ.bottomRight : 0.5,
+  };
+  // Penalizza gli angoli dove sappiamo già che finirà anche una didascalia
+  // di testo, così l'adesivo la evita quando possibile (senza rimpicciolire
+  // nulla — se non c'è davvero spazio libero da nessuna parte, un minimo
+  // di sovrapposizione resta accettabile).
+  if (textStyle === "sticker") base.topRight += 0.4;
+  if (textStyle === "ribbon") { base.topLeft += 0.4; base.topRight += 0.4; }
+  if (textStyle === "sign" || textStyle === "balloon") { base.bottomLeft += 0.15; base.bottomRight += 0.15; }
+
+  if (!occ && !textStyle) return canonicalSide;
+
+  const leftKey = band === "top" ? "topLeft" : "bottomLeft";
+  const rightKey = band === "top" ? "topRight" : "bottomRight";
+  const leftOcc = base[leftKey];
+  const rightOcc = base[rightKey];
+  if (canonicalSide === "left" && rightOcc + 0.12 < leftOcc) return "right";
+  if (canonicalSide === "right" && leftOcc + 0.12 < rightOcc) return "left";
+  return canonicalSide;
+}
+
+// Riflette una frazione x (0-1) rispetto al centro orizzontale, usata dai
+// cluster decorativi (fiori, cuori, stelle, ecc.) per spostarsi sul lato
+// opposto quando quello di default è troppo occupato dal personaggio.
+function mirrorX(xFrac, mirror) {
+  return mirror ? 1 - xFrac : xFrac;
 }
 
 /* ---- Cartello/testo opzionale sopra l'immagine (stile fumetto) ---- */
 
 const RELAX_CAPTION_PRESETS = ["GM", "GN", "MINT NOW", "I'M A METAMUSEX FAN", "WAGMI", "LFG"];
 const RELAX_CAPTION_MAX_LENGTH = 28;
-const RELAX_CAPTION_STYLES = [
+// Due gruppi INDIPENDENTI: una didascalia di testo e un adesivo possono
+// essere scelti insieme, uno per gruppo (mai due didascalie o due adesivi
+// contemporaneamente, ma un testo + un adesivo sì).
+const RELAX_CAPTION_TEXT_STYLES = [
   { key: "sign", label: "🪧 Sign" },
   { key: "balloon", label: "💬 Speech bubble" },
   { key: "sticker", label: "🎖️ Sticker" },
   { key: "ribbon", label: "🎗️ Ribbon" },
+];
+const RELAX_CAPTION_STICKER_STYLES = [
   { key: "bird", label: "🐦 Bird" },
   { key: "dino", label: "🦖 Dino" },
+  { key: "cat", label: "🐱 Cat" },
+  { key: "alien", label: "🛸 Alien" },
   { key: "flower", label: "🌸 Flower" },
   { key: "heart", label: "💖 Heart" },
   { key: "star", label: "⭐ Star" },
+  { key: "smiley", label: "😊 Smiley" },
+  { key: "fire", label: "🔥 Fire" },
   { key: "rocket", label: "🚀 Rocket" },
 ];
-const RELAX_CAPTION_DEFAULT_LABELS = { bird: "CHIRP CHIRP", dino: "RAWR", rocket: "TO THE MOON" };
-const RELAX_CAPTION_DECORATION_ONLY_STYLES = ["flower", "heart", "star"];
-const RELAX_CAPTION_CREATURE_STYLES = ["bird", "dino", "rocket"];
-let relaxCaptionState = null; // { groupKey, identifier, level, baseCanvas, text, style }
+const RELAX_CAPTION_DEFAULT_LABELS = { bird: "CHIRP CHIRP", dino: "RAWR", rocket: "TO THE MOON", cat: "MEOW", alien: "BEEP BOOP" };
+const RELAX_CAPTION_CREATURE_STYLES = ["bird", "dino", "rocket", "cat", "alien"];
+let relaxCaptionState = null; // { groupKey, identifier, level, baseCanvas, text, textStyle, stickerStyle }
 
 function measureFittedFontSize(ctx, label, maxWidth, startSize, minSize) {
   let fontSize = startSize;
@@ -4053,20 +4144,23 @@ function drawSmallSpeechBubble(ctx, label, anchorX, anchorY, direction, fontSize
 
 function drawBirdCaption(ctx, canvas, label) {
   const scale = (canvas.width / 1000) * 4;
-  const x = canvas.width * 0.85, y = canvas.height * 0.17;
+  const side = chooseDecorationSide(canvas, "top", "right");
+  const mirror = side === "left";
+  const x = canvas.width * (mirror ? 0.15 : 0.85), y = canvas.height * 0.17;
+  const dir = mirror ? -1 : 1;
 
   ctx.save();
   ctx.strokeStyle = "#1B1B1F"; ctx.lineWidth = 3 * scale; ctx.lineCap = "round";
   [0, 1, 2].forEach((i) => {
     ctx.beginPath();
-    ctx.moveTo(x + (60 + i * 14) * scale, y - 10 * scale + i * 6 * scale);
-    ctx.lineTo(x + (90 + i * 14) * scale, y - 4 * scale + i * 6 * scale);
+    ctx.moveTo(x + dir * (60 + i * 14) * scale, y - 10 * scale + i * 6 * scale);
+    ctx.lineTo(x + dir * (90 + i * 14) * scale, y - 4 * scale + i * 6 * scale);
     ctx.stroke();
   });
   ctx.restore();
 
   ctx.save();
-  ctx.translate(x, y); ctx.scale(scale, scale);
+  ctx.translate(x, y); ctx.scale(dir * scale, scale);
   ctx.lineWidth = 4; ctx.strokeStyle = "#1B1B1F";
 
   ctx.beginPath(); ctx.moveTo(-24, 4); ctx.lineTo(-40, -6); ctx.lineTo(-40, 12); ctx.closePath();
@@ -4086,16 +4180,19 @@ function drawBirdCaption(ctx, canvas, label) {
   ctx.restore();
 
   const fontSize = Math.max(22, Math.round(canvas.width * 0.05));
-  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.bird, x - 60 * scale, y - 6 * scale, "left", fontSize);
+  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.bird, x - dir * 60 * scale, y - 6 * scale, mirror ? "right" : "left", fontSize);
 }
 
 function drawDinoCaption(ctx, canvas, label) {
   const scale = (canvas.width / 1000) * 5.5;
-  const x = canvas.width * 0.3, y = canvas.height * 0.99;
+  const side = chooseDecorationSide(canvas, "bottom", "left");
+  const mirror = side === "right";
+  const x = canvas.width * (mirror ? 0.88 : 0.12), y = canvas.height * 0.99;
+  const dir = mirror ? -1 : 1;
   const darkGreen = "#3B6D11", green = "#639922", lightGreen = "#97C459";
 
   ctx.save();
-  ctx.translate(x, y); ctx.scale(scale, scale);
+  ctx.translate(x, y); ctx.scale(dir * scale, scale);
   ctx.lineWidth = 3.5; ctx.strokeStyle = "#1B1B1F";
 
   // coda
@@ -4163,7 +4260,7 @@ function drawDinoCaption(ctx, canvas, label) {
   ctx.restore();
 
   const fontSize = Math.max(22, Math.round(canvas.width * 0.05));
-  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.dino, x + 26 * scale, y - 62 * scale, "right", fontSize);
+  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.dino, x + dir * 26 * scale, y - 62 * scale, mirror ? "left" : "right", fontSize);
 }
 
 function drawFlowerShape(ctx, x, y, scale) {
@@ -4184,8 +4281,9 @@ function drawFlowerShape(ctx, x, y, scale) {
 
 function drawFlowerCaption(ctx, canvas) {
   const scale = (canvas.width / 1000) * 3.4;
-  drawFlowerShape(ctx, canvas.width * 0.16, canvas.height * 0.15, scale);
-  drawFlowerShape(ctx, canvas.width * 0.32, canvas.height * 0.25, scale * 0.55);
+  const mirror = chooseDecorationSide(canvas, "top", "left") === "right";
+  drawFlowerShape(ctx, canvas.width * mirrorX(0.16, mirror), canvas.height * 0.15, scale);
+  drawFlowerShape(ctx, canvas.width * mirrorX(0.32, mirror), canvas.height * 0.25, scale * 0.55);
 }
 
 function drawHeartShape(ctx, x, y, size) {
@@ -4202,10 +4300,11 @@ function drawHeartShape(ctx, x, y, size) {
 }
 
 function drawHeartCaption(ctx, canvas) {
-  const scale = (canvas.width / 1000) * 3.2;
-  drawHeartShape(ctx, canvas.width * 0.88, canvas.height * 0.15, scale);
-  drawHeartShape(ctx, canvas.width * 0.74, canvas.height * 0.28, scale * 0.6);
-  drawHeartShape(ctx, canvas.width * 0.94, canvas.height * 0.3, scale * 0.4);
+  const scale = (canvas.width / 1000) * 4.4;
+  const mirror = chooseDecorationSide(canvas, "top", "right") === "left";
+  drawHeartShape(ctx, canvas.width * mirrorX(0.88, mirror), canvas.height * 0.15, scale);
+  drawHeartShape(ctx, canvas.width * mirrorX(0.74, mirror), canvas.height * 0.28, scale * 0.65);
+  drawHeartShape(ctx, canvas.width * mirrorX(0.94, mirror), canvas.height * 0.3, scale * 0.45);
 }
 
 function drawSparkle(ctx, x, y, size) {
@@ -4225,17 +4324,21 @@ function drawSparkle(ctx, x, y, size) {
 
 function drawStarCaption(ctx, canvas) {
   const scale = (canvas.width / 1000) * 3.6;
-  drawSparkle(ctx, canvas.width * 0.17, canvas.height * 0.89, scale);
-  drawSparkle(ctx, canvas.width * 0.05, canvas.height * 0.75, scale * 0.5);
-  drawSparkle(ctx, canvas.width * 0.28, canvas.height * 0.96, scale * 0.4);
+  const mirror = chooseDecorationSide(canvas, "top", "left") === "right";
+  drawSparkle(ctx, canvas.width * mirrorX(0.17, mirror), canvas.height * 0.13, scale);
+  drawSparkle(ctx, canvas.width * mirrorX(0.05, mirror), canvas.height * 0.24, scale * 0.5);
+  drawSparkle(ctx, canvas.width * mirrorX(0.28, mirror), canvas.height * 0.07, scale * 0.4);
 }
 
 function drawRocketCaption(ctx, canvas, label) {
   const scale = (canvas.width / 1000) * 4;
-  const x = canvas.width * 0.78, y = canvas.height * 0.78;
+  const side = chooseDecorationSide(canvas, "top", "right");
+  const mirror = side === "left";
+  const x = canvas.width * (mirror ? 0.22 : 0.78), y = canvas.height * 0.2;
+  const dir = mirror ? -1 : 1;
 
   ctx.save();
-  ctx.translate(x, y); ctx.rotate(-0.7); ctx.scale(scale, scale);
+  ctx.translate(x, y); ctx.rotate(-0.7); ctx.scale(dir * scale, scale);
   ctx.lineWidth = 4; ctx.strokeStyle = "#1B1B1F";
 
   ctx.beginPath();
@@ -4264,38 +4367,194 @@ function drawRocketCaption(ctx, canvas, label) {
   ctx.restore();
 
   const fontSize = Math.max(22, Math.round(canvas.width * 0.05));
-  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.rocket, x - 46 * scale, y - 30 * scale, "left", fontSize);
+  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.rocket, x - dir * 46 * scale, y - 30 * scale, mirror ? "right" : "left", fontSize);
 }
 
-async function drawCaptionOnCanvas(sourceCanvas, text, style) {
+function drawCatCaption(ctx, canvas, label) {
+  const scale = (canvas.width / 1000) * 4.2;
+  const side = chooseDecorationSide(canvas, "bottom", "right");
+  const mirror = side === "left";
+  const x = canvas.width * (mirror ? 0.15 : 0.85), y = canvas.height * 0.83;
+  const dir = mirror ? -1 : 1;
+
+  ctx.save();
+  ctx.translate(x, y); ctx.scale(dir * scale, scale);
+  ctx.lineWidth = 4; ctx.strokeStyle = "#1B1B1F";
+  const furColor = "#F5A623";
+
+  // orecchie
+  ctx.beginPath();
+  ctx.moveTo(-18, -18); ctx.lineTo(-10, -34); ctx.lineTo(-2, -18); ctx.closePath();
+  ctx.fillStyle = furColor; ctx.fill(); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(2, -18); ctx.lineTo(10, -34); ctx.lineTo(18, -18); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // testa
+  ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI * 2);
+  ctx.fillStyle = furColor; ctx.fill(); ctx.stroke();
+
+  // occhi
+  ctx.beginPath(); ctx.arc(-7, -2, 2.6, 0, Math.PI * 2); ctx.fillStyle = "#1B1B1F"; ctx.fill();
+  ctx.beginPath(); ctx.arc(7, -2, 2.6, 0, Math.PI * 2); ctx.fill();
+
+  // naso
+  ctx.beginPath();
+  ctx.moveTo(-3, 6); ctx.lineTo(3, 6); ctx.lineTo(0, 10); ctx.closePath();
+  ctx.fillStyle = "#D4537E"; ctx.fill();
+
+  // bocca
+  ctx.beginPath();
+  ctx.moveTo(0, 10); ctx.quadraticCurveTo(-5, 14, -9, 11);
+  ctx.moveTo(0, 10); ctx.quadraticCurveTo(5, 14, 9, 11);
+  ctx.strokeStyle = "#1B1B1F"; ctx.lineWidth = 2; ctx.stroke();
+
+  // baffi
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(-20, 4); ctx.lineTo(-34, 2);
+  ctx.moveTo(-20, 8); ctx.lineTo(-34, 10);
+  ctx.moveTo(20, 4); ctx.lineTo(34, 2);
+  ctx.moveTo(20, 8); ctx.lineTo(34, 10);
+  ctx.stroke();
+  ctx.restore();
+
+  const fontSize = Math.max(22, Math.round(canvas.width * 0.05));
+  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.cat, x + dir * 30 * scale, y - 24 * scale, mirror ? "left" : "right", fontSize);
+}
+
+function drawSmileyShape(ctx, x, y, size) {
+  ctx.save();
+  ctx.translate(x, y); ctx.scale(size, size);
+  ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI * 2);
+  ctx.fillStyle = "#FFC93C"; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = "#1B1B1F"; ctx.stroke();
+  ctx.beginPath(); ctx.arc(-5, -3, 1.9, 0, Math.PI * 2); ctx.fillStyle = "#1B1B1F"; ctx.fill();
+  ctx.beginPath(); ctx.arc(5, -3, 1.9, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.arc(0, -1, 7, 0.15 * Math.PI, 0.85 * Math.PI);
+  ctx.lineWidth = 2; ctx.stroke();
+  ctx.restore();
+}
+
+function drawSmileyCaption(ctx, canvas) {
+  const scale = (canvas.width / 1000) * 3.2;
+  const mirror = chooseDecorationSide(canvas, "top", "right") === "left";
+  drawSmileyShape(ctx, canvas.width * mirrorX(0.86, mirror), canvas.height * 0.15, scale);
+  drawSmileyShape(ctx, canvas.width * mirrorX(0.74, mirror), canvas.height * 0.26, scale * 0.6);
+  drawSmileyShape(ctx, canvas.width * mirrorX(0.95, mirror), canvas.height * 0.28, scale * 0.42);
+}
+
+function drawFlameShape(ctx, x, y, size) {
+  ctx.save();
+  ctx.translate(x, y); ctx.scale(size, size);
+  ctx.beginPath();
+  ctx.moveTo(0, -20);
+  ctx.quadraticCurveTo(13, -6, 6, 7);
+  ctx.quadraticCurveTo(11, 2, 8, -5);
+  ctx.quadraticCurveTo(15, 11, 0, 20);
+  ctx.quadraticCurveTo(-15, 11, -8, -5);
+  ctx.quadraticCurveTo(-11, 2, -6, 7);
+  ctx.quadraticCurveTo(-13, -6, 0, -20);
+  ctx.closePath();
+  ctx.fillStyle = "#FF3D7F"; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = "#1B1B1F"; ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0, -8);
+  ctx.quadraticCurveTo(6, 0, 3, 9);
+  ctx.quadraticCurveTo(0, 13, -3, 9);
+  ctx.quadraticCurveTo(-6, 0, 0, -8);
+  ctx.closePath();
+  ctx.fillStyle = "#FFC93C"; ctx.fill();
+  ctx.restore();
+}
+
+function drawFireCaption(ctx, canvas) {
+  const scale = (canvas.width / 1000) * 3.6;
+  const mirror = chooseDecorationSide(canvas, "bottom", "right") === "left";
+  drawFlameShape(ctx, canvas.width * mirrorX(0.85, mirror), canvas.height * 0.86, scale);
+  drawFlameShape(ctx, canvas.width * mirrorX(0.72, mirror), canvas.height * 0.92, scale * 0.55);
+  drawFlameShape(ctx, canvas.width * mirrorX(0.94, mirror), canvas.height * 0.94, scale * 0.4);
+}
+
+function drawAlienCaption(ctx, canvas, label) {
+  const scale = (canvas.width / 1000) * 4.5;
+  const side = chooseDecorationSide(canvas, "top", "left");
+  const mirror = side === "right";
+  const x = canvas.width * (mirror ? 0.82 : 0.18), y = canvas.height * 0.2;
+  const dir = mirror ? -1 : 1;
+
+  ctx.save();
+  ctx.translate(x, y); ctx.scale(dir * scale, scale);
+  ctx.lineWidth = 3.5; ctx.strokeStyle = "#1B1B1F";
+
+  // scafo del disco volante
+  ctx.beginPath();
+  ctx.ellipse(0, 12, 34, 10, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#B9B2A4"; ctx.fill(); ctx.stroke();
+
+  // cupola
+  ctx.beginPath();
+  ctx.ellipse(0, -4, 17, 15, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#85B7EB"; ctx.fill(); ctx.stroke();
+
+  // alieno dentro la cupola
+  ctx.beginPath();
+  ctx.ellipse(0, -2, 9, 11, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#7ED957"; ctx.fill();
+  ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(-3.5, -3, 2.6, 3.4, -0.2, 0, Math.PI * 2); ctx.fillStyle = "#1B1B1F"; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(3.5, -3, 2.6, 3.4, 0.2, 0, Math.PI * 2); ctx.fill();
+
+  // lucine sotto lo scafo
+  ctx.fillStyle = "#FFC93C";
+  [-20, -7, 7, 20].forEach((lx) => { ctx.beginPath(); ctx.arc(lx, 18, 2.4, 0, Math.PI * 2); ctx.fill(); });
+  ctx.restore();
+
+  const fontSize = Math.max(22, Math.round(canvas.width * 0.05));
+  drawSmallSpeechBubble(ctx, label || RELAX_CAPTION_DEFAULT_LABELS.alien, x + dir * 46 * scale, y - 4 * scale, mirror ? "left" : "right", fontSize);
+}
+
+async function drawCaptionOnCanvas(sourceCanvas, text, textStyle, stickerStyle) {
   const canvas = document.createElement("canvas");
   canvas.width = sourceCanvas.width;
   canvas.height = sourceCanvas.height;
+  canvas.zoneOccupancy = sourceCanvas.zoneOccupancy; // porta con sé i dati di occupazione
+  canvas.activeTextStyle = textStyle || null; // così l'adesivo sa se deve evitare anche il testo
   const ctx = canvas.getContext("2d");
   ctx.drawImage(sourceCanvas, 0, 0);
 
-  const isCreatureStyle = RELAX_CAPTION_CREATURE_STYLES.includes(style);
-  const isDecorationOnly = RELAX_CAPTION_DECORATION_ONLY_STYLES.includes(style);
-  const trimmed = (text || "").trim();
-  if (!trimmed && !isCreatureStyle && !isDecorationOnly) return canvas;
-
-  const label = trimmed ? trimmed.toUpperCase() : (RELAX_CAPTION_DEFAULT_LABELS[style] || "");
   try { await document.fonts.load('64px "Bangers"'); } catch (e) {}
 
-  const maxWidth = canvas.width * 0.82;
-  const startSize = Math.round(canvas.width * 0.16);
+  // Disegna prima l'adesivo (se scelto) — così, quando viene disegnato il
+  // testo sopra, resta sempre leggibile anche nel raro caso di una minima
+  // sovrapposizione residua.
+  if (stickerStyle) {
+    switch (stickerStyle) {
+      case "bird": drawBirdCaption(ctx, canvas); break;
+      case "dino": drawDinoCaption(ctx, canvas); break;
+      case "cat": drawCatCaption(ctx, canvas); break;
+      case "alien": drawAlienCaption(ctx, canvas); break;
+      case "rocket": drawRocketCaption(ctx, canvas); break;
+      case "flower": drawFlowerCaption(ctx, canvas); break;
+      case "heart": drawHeartCaption(ctx, canvas); break;
+      case "star": drawStarCaption(ctx, canvas); break;
+      case "smiley": drawSmileyCaption(ctx, canvas); break;
+      case "fire": drawFireCaption(ctx, canvas); break;
+    }
+  }
 
-  switch (style) {
-    case "balloon": drawBalloonCaption(ctx, canvas, label, maxWidth, startSize); break;
-    case "sticker": drawStickerCaption(ctx, canvas, label, maxWidth, startSize); break;
-    case "ribbon": drawRibbonCaption(ctx, canvas, label, maxWidth, startSize); break;
-    case "bird": drawBirdCaption(ctx, canvas, label); break;
-    case "dino": drawDinoCaption(ctx, canvas, label); break;
-    case "flower": drawFlowerCaption(ctx, canvas); break;
-    case "heart": drawHeartCaption(ctx, canvas); break;
-    case "star": drawStarCaption(ctx, canvas); break;
-    case "rocket": drawRocketCaption(ctx, canvas, label); break;
-    default: drawSignCaption(ctx, canvas, label, maxWidth, startSize);
+  const trimmed = (text || "").trim();
+  if (textStyle && trimmed) {
+    const label = trimmed.toUpperCase();
+    const maxWidth = canvas.width * 0.82;
+    const startSize = Math.round(canvas.width * 0.16);
+    switch (textStyle) {
+      case "balloon": drawBalloonCaption(ctx, canvas, label, maxWidth, startSize); break;
+      case "sticker": drawStickerCaption(ctx, canvas, label, maxWidth, startSize); break;
+      case "ribbon": drawRibbonCaption(ctx, canvas, label, maxWidth, startSize); break;
+      default: drawSignCaption(ctx, canvas, label, maxWidth, startSize);
+    }
   }
 
   return canvas;
@@ -4311,7 +4570,7 @@ async function updateRelaxCaptionPreview() {
   if (!relaxCaptionState) return;
   const preview = document.getElementById("relax-caption-preview-canvas");
   if (!preview) return;
-  const composed = await drawCaptionOnCanvas(relaxCaptionState.baseCanvas, relaxCaptionState.text, relaxCaptionState.style);
+  const composed = await drawCaptionOnCanvas(relaxCaptionState.baseCanvas, relaxCaptionState.text, relaxCaptionState.textStyle, relaxCaptionState.stickerStyle);
   preview.src = composed.toDataURL("image/png");
 }
 
@@ -4326,14 +4585,8 @@ async function setRelaxCaptionLevel(level) {
   updateRelaxCaptionPreview();
 }
 
-function relaxCaptionTextControlsAllowed(style) {
-  // Gli elementi "creatura" (uccellino, dinosauro, razzo) hanno già una loro scritta
-  // incorporata: l'utente non può aggiungerne un'altra sopra.
-  return style && !RELAX_CAPTION_CREATURE_STYLES.includes(style);
-}
-
 function updateRelaxCaptionTextControlsVisibility() {
-  const allowed = relaxCaptionTextControlsAllowed(relaxCaptionState ? relaxCaptionState.style : null);
+  const allowed = !!(relaxCaptionState && relaxCaptionState.textStyle);
   const presets = document.querySelector(".relax-caption-presets");
   const input = document.getElementById("relax-caption-input");
   if (presets) presets.style.display = allowed ? "flex" : "none";
@@ -4351,28 +4604,39 @@ function setRelaxCaptionText(text) {
   updateRelaxCaptionPreview();
 }
 
-// Click su uno stile: se non è già selezionato lo aggiunge, se è già selezionato lo toglie
-// (torna all'immagine senza nessun elemento sopra).
-function setRelaxCaptionStyle(style) {
+// Click su uno stile di TESTO: se non è già selezionato lo aggiunge, se è già
+// selezionato lo toglie. Indipendente dall'adesivo eventualmente scelto.
+function setRelaxCaptionTextStyle(style) {
   if (!relaxCaptionState) return;
-  relaxCaptionState.style = relaxCaptionState.style === style ? null : style;
-  if (!relaxCaptionTextControlsAllowed(relaxCaptionState.style)) {
+  relaxCaptionState.textStyle = relaxCaptionState.textStyle === style ? null : style;
+  if (!relaxCaptionState.textStyle) {
     relaxCaptionState.text = "";
     const input = document.getElementById("relax-caption-input");
     if (input) input.value = "";
     document.querySelectorAll(".relax-caption-preset-btn").forEach((btn) => btn.classList.remove("active"));
   }
-  document.querySelectorAll(".relax-caption-style-btn").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.style === relaxCaptionState.style);
+  document.querySelectorAll(".relax-caption-text-style-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.style === relaxCaptionState.textStyle);
   });
   updateRelaxCaptionTextControlsVisibility();
   updateRelaxCaptionPreview();
 }
 
+// Click su un ADESIVO: stessa logica, ma indipendente dal testo — i due
+// possono coesistere sulla stessa immagine.
+function setRelaxCaptionStickerStyle(style) {
+  if (!relaxCaptionState) return;
+  relaxCaptionState.stickerStyle = relaxCaptionState.stickerStyle === style ? null : style;
+  document.querySelectorAll(".relax-caption-sticker-style-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.style === relaxCaptionState.stickerStyle);
+  });
+  updateRelaxCaptionPreview();
+}
+
 async function confirmRelaxCaptionDownload() {
   if (!relaxCaptionState) return;
-  const { groupKey, identifier, level, baseCanvas, text, style } = relaxCaptionState;
-  const finalCanvas = await drawCaptionOnCanvas(baseCanvas, text, style);
+  const { groupKey, identifier, level, baseCanvas, text, textStyle, stickerStyle } = relaxCaptionState;
+  const finalCanvas = await drawCaptionOnCanvas(baseCanvas, text, textStyle, stickerStyle);
   triggerCanvasDownload(finalCanvas, groupKey, identifier, level);
   closeRelaxCaptionModal();
 }
@@ -4385,7 +4649,7 @@ function triggerCanvasDownload(canvas, groupKey, identifier, level) {
 }
 
 function openRelaxCaptionModal(groupKey, identifier, level, maxUnlocked, baseCanvas) {
-  relaxCaptionState = { groupKey, identifier, level, maxUnlocked, baseCanvas, text: "", style: null };
+  relaxCaptionState = { groupKey, identifier, level, maxUnlocked, baseCanvas, text: "", textStyle: null, stickerStyle: null };
 
   const levelButtons = Array.from({ length: maxUnlocked }, (_, i) => i + 1)
     .map((l) => `<button type="button" class="relax-caption-level-btn${l === level ? " active" : ""}" data-level="${l}" onclick="setRelaxCaptionLevel(${l})">Level ${l}</button>`)
@@ -4396,16 +4660,21 @@ function openRelaxCaptionModal(groupKey, identifier, level, maxUnlocked, baseCan
   overlay.id = "relax-caption-overlay";
   overlay.innerHTML = `
     <div class="relax-caption-panel">
-      <div class="relax-caption-title">Add a caption?</div>
+      <div class="relax-caption-title">Add a caption or sticker?</div>
       <img class="relax-caption-preview" id="relax-caption-preview-canvas" alt="Preview" />
       ${maxUnlocked > 1 ? `<div class="relax-caption-levels">${levelButtons}</div>` : ""}
+      <div class="mono" style="font-size:11px; color:#6b6b70; margin-bottom:6px;">Caption text (optional):</div>
       <div class="relax-caption-styles">
-        ${RELAX_CAPTION_STYLES.map((s) => `<button type="button" class="relax-caption-style-btn" data-style="${s.key}" onclick="setRelaxCaptionStyle('${s.key}')">${s.label}</button>`).join("")}
+        ${RELAX_CAPTION_TEXT_STYLES.map((s) => `<button type="button" class="relax-caption-style-btn relax-caption-text-style-btn" data-style="${s.key}" onclick="setRelaxCaptionTextStyle('${s.key}')">${s.label}</button>`).join("")}
       </div>
       <div class="relax-caption-presets">
         ${RELAX_CAPTION_PRESETS.map((p) => `<button type="button" class="relax-caption-preset-btn" data-preset="${escapeHtml(p)}" onclick="setRelaxCaptionText('${p.replace(/'/g, "\\'")}')">${escapeHtml(p)}</button>`).join("")}
       </div>
       <input type="text" class="relax-caption-input" id="relax-caption-input" placeholder="Or write your own text..." maxlength="${RELAX_CAPTION_MAX_LENGTH}" oninput="setRelaxCaptionText(this.value)" />
+      <div class="mono" style="font-size:11px; color:#6b6b70; margin:10px 0 6px;">Sticker (optional) — can be combined with the caption above, auto-positioned to avoid overlap:</div>
+      <div class="relax-caption-styles">
+        ${RELAX_CAPTION_STICKER_STYLES.map((s) => `<button type="button" class="relax-caption-style-btn relax-caption-sticker-style-btn" data-style="${s.key}" onclick="setRelaxCaptionStickerStyle('${s.key}')">${s.label}</button>`).join("")}
+      </div>
       <div class="relax-caption-actions">
         <button type="button" onclick="confirmRelaxCaptionDownload()">⬇️ Download</button>
         <button type="button" class="secondary" onclick="triggerCanvasDownload(relaxCaptionState.baseCanvas, relaxCaptionState.groupKey, relaxCaptionState.identifier, relaxCaptionState.level); closeRelaxCaptionModal();">Download without caption</button>
