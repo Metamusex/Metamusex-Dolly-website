@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verifica Holder — MetaMuseX &amp; Dolly</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root { --accent:#e84f9b; --ink:#1d1b26; --muted:#6b6780; --line:#f0dbe7; --ok:#1f9d63; --err:#c53030; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; font-family:Poppins,system-ui,sans-serif; color:var(--ink);
+         background: radial-gradient(circle at 15% 10%, #ffe3f1 0, transparent 45%), radial-gradient(circle at 90% 90%, #fff3c4 0, transparent 40%), #fff4f9;
+         display:flex; align-items:center; justify-content:center; padding:24px 16px; }
+  .card { width:100%; max-width:460px; background:#fff; border-radius:22px; padding:28px 24px;
+          box-shadow:0 20px 50px -20px rgba(232,79,155,.35); border:1px solid var(--line); }
+  .eyebrow { font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); font-weight:600; }
+  h1 { margin:6px 0 8px; font-size:26px; font-weight:800; line-height:1.15; }
+  p { color:var(--muted); line-height:1.55; margin:0 0 14px; font-size:15px; }
+  .steps { display:flex; gap:8px; margin:14px 0 18px; }
+  .step { flex:1; height:6px; border-radius:6px; background:#f3e6ee; }
+  .step.on { background:var(--accent); }
+  .btn { display:flex; align-items:center; justify-content:center; gap:10px; width:100%; border:0; cursor:pointer;
+         padding:14px 18px; border-radius:14px; font:600 16px Poppins,sans-serif; text-decoration:none; margin-top:10px; transition:transform .1s, opacity .2s; }
+  .btn:active { transform:scale(.98); }
+  .btn[disabled] { opacity:.55; cursor:wait; }
+  .primary { background:var(--accent); color:#fff; }
+  .ghost { background:#f6eff3; color:var(--ink); }
+  .done { background:var(--ok); color:#fff; }
+  .code { width:100%; min-height:110px; resize:none; border:2px dashed var(--accent); border-radius:14px; padding:12px;
+          font:13px ui-monospace,monospace; color:var(--ink); background:#fff9fc; word-break:break-all; }
+  .msg { margin-top:14px; padding:12px 14px; border-radius:12px; font-size:14px; line-height:1.5; display:none; }
+  .msg.ok { display:block; background:#e3f7ec; color:#14633f; }
+  .msg.warn { display:block; background:#fff6e0; color:#7a5212; }
+  .msg.err { display:block; background:#fde8e8; color:#8a1f1f; }
+  .foot { margin-top:18px; font-size:12px; color:var(--muted); text-align:center; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="eyebrow">MetaMuseX &amp; Dolly</div>
+  <h1>Verifica holder</h1>
+  <div class="steps"><div class="step on" id="s1"></div><div class="step" id="s2"></div><div class="step" id="s3"></div></div>
+
+  <!-- link non valido -->
+  <section id="invalid" class="hidden">
+    <p>Apri questa pagina dal pulsante <b>✅ Verifica wallet</b> nel canale di verifica su Discord: il link contiene il tuo codice personale.</p>
+  </section>
+
+  <!-- passo 1: collega e firma -->
+  <section id="connectBox" class="hidden">
+    <p>Collega il wallet che contiene i tuoi NFT e firma il messaggio. La firma è <b>gratuita</b> e non autorizza nessuna transazione.</p>
+    <button class="btn primary" id="connect">🦊 Collega wallet e firma</button>
+    <div id="mobile" class="hidden">
+      <p style="margin-top:14px">Non trovo un wallet in questo browser. Su telefono apri questa pagina <b>dentro l'app del tuo wallet</b>:</p>
+      <a class="btn primary" id="mmLink" href="#">Apri in MetaMask</a>
+      <button class="btn ghost" id="copyLink">Copia link (Trust, Rainbow, Coinbase…)</button>
+    </div>
+  </section>
+
+  <!-- passo 2: copia il codice -->
+  <section id="codeBox" class="hidden">
+    <p><b>Firma fatta!</b> Ora copia questo codice, torna su Discord e premi <b>📋 Incolla codice</b>.</p>
+    <textarea class="code" id="code" readonly></textarea>
+    <button class="btn primary" id="copyCode">📋 Copia codice</button>
+  </section>
+
+  <div class="msg" id="msg"></div>
+  <p class="foot">Non chiederemo mai la tua seed phrase.</p>
+</main>
+
+<script>
+// ATTENZIONE: questo messaggio deve essere identico a buildMessage() in core.js
+function buildMessage(uid, address, nonce) {
+  return [
+    "MetaMuseX & Dolly — verifica Discord",
+    "",
+    "Collego questo wallet al mio account Discord.",
+    "Discord ID: " + uid,
+    "Wallet: " + address.toLowerCase(),
+    "Codice: " + nonce,
+    "",
+    "Questa firma è gratuita e non autorizza nessuna transazione.",
+  ].join("\n");
+}
+
+const qs = new URLSearchParams(location.search);
+const UID = qs.get("u") || "";
+const NONCE = qs.get("n") || "";
+const $ = (id) => document.getElementById(id);
+
+function show(kind, text) { const m = $("msg"); m.className = "msg " + kind; m.textContent = text; }
+function step(n) { ["s1","s2","s3"].forEach((id, i) => $(id).classList.toggle("on", i < n)); }
+function toHex(str) {
+  return "0x" + Array.from(new TextEncoder().encode(str), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+if (!/^\d{15,22}$/.test(UID) || !/^[0-9a-f]{8,32}$/.test(NONCE)) {
+  $("invalid").classList.remove("hidden");
+} else {
+  $("connectBox").classList.remove("hidden");
+}
+
+$("connect").onclick = async () => {
+  const eth = window.ethereum;
+  if (!eth) {
+    $("mmLink").href = "https://metamask.app.link/dapp/" + location.host + location.pathname + location.search;
+    $("mobile").classList.remove("hidden");
+    return;
+  }
+  const btn = $("connect"); btn.disabled = true;
+  try {
+    show("warn", "Conferma la connessione nel wallet…");
+    const [address] = await eth.request({ method: "eth_requestAccounts" });
+    step(2);
+    show("warn", "Ora firma il messaggio nel wallet (è gratis)…");
+    const signature = await eth.request({ method: "personal_sign", params: [toHex(buildMessage(UID, address, NONCE)), address] });
+    $("code").value = address + ":" + signature;
+    $("connectBox").classList.add("hidden");
+    $("codeBox").classList.remove("hidden");
+    step(3);
+    $("msg").className = "msg";
+  } catch (e) {
+    step(1);
+    show("err", e && e.code === 4001 ? "Richiesta annullata nel wallet." : "Errore: " + ((e && e.message) || e));
+  } finally { btn.disabled = false; }
+};
+
+$("copyCode").onclick = async () => {
+  const text = $("code").value;
+  try { await navigator.clipboard.writeText(text); }
+  catch { $("code").select(); document.execCommand("copy"); }
+  $("copyCode").textContent = "✅ Copiato! Ora torna su Discord";
+  $("copyCode").className = "btn done";
+};
+
+$("copyLink").onclick = async () => {
+  try { await navigator.clipboard.writeText(location.href); show("ok", "Link copiato: incollalo nel browser della tua app wallet."); }
+  catch { prompt("Copia questo link:", location.href); }
+};
+</script>
+</body>
+</html>
