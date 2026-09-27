@@ -1,0 +1,11 @@
+{
+  "active": false,
+  "title": "New Muse Premiere",
+  "subtitle": "An immersive exhibition by SilviaCat. Turn on your sound.",
+  "opensAt": "2026-10-10T21:00:00+02:00",
+  "closesAt": "2026-10-17T23:59:00+02:00",
+  "music": ["gallery-music.mp3", "gallery-music-5.mp3"],
+  "works": [
+    { "opensea": "https://opensea.io/item/polygon/0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6/88" }
+  ]
+}
