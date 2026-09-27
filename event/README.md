@@ -23,6 +23,8 @@ La mostra si gestisce dalla pagina **event-admin.html** del sito.
    - **Artworks** (massimo 12):
      - *OpenSea link*: incolla il link della pagina dell'NFT.
      - *Image on the site*: scrivi `event/` e il nome del file, esattamente uguale, maiuscole comprese. Per esempio `event/new-muse.jpg`.
+   - **🎯 Frame** (accanto a ogni opera): clicca il punto più importante (per esempio gli occhi) e scegli *Automatic*, *Fill the walls* o *Show the whole artwork*.
+   - **Animated texts**: una frase per riga, fino a 10. Lo spettacolo si apre con la musica e la prima frase, poi le frasi tornano ogni tanto tra le opere, ferme o scorrendo lungo tutte le pareti. Se lasci il campo vuoto, solo immagini.
    - **Animation**: *one artwork on all the walls*, *a mix of artworks* oppure *alternate*.
    - **Music**: scegli 2 o 3 brani. Con ▶ puoi ascoltarli.
 
@@ -33,7 +35,7 @@ La mostra si gestisce dalla pagina **event-admin.html** del sito.
    - Spunta **Exhibition ON** e premi **💾 Save**.
 
 6. **Annuncia la mostra**
-   - Copia il **link da annunciare** in fondo alla pagina (`…/gallery3d.html?event`) e pubblicalo su Discord e X.
+   - In fondo alla pagina trovi il **link da annunciare** (`…/gallery3d.html?event`) e un **annuncio già pronto**: modificalo se vuoi, premi **📋 Copy the announcement** e incollalo su Discord e X.
 
 ---
 
