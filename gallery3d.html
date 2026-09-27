@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>MetaMuseX 3D Gallery</title>
+<style>
+  :root{
+    --ink:#1d1b22; --paper:#fffaf3; --pink:#ff4f9a; --yellow:#ffd23f; --muted:#6b6675;
+    --panel:rgba(255,250,243,.96); --shadow:0 8px 30px rgba(0,0,0,.25);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:#111;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink)}
+  #scene{display:block;width:100vw;height:100vh;touch-action:none;cursor:grab}
+  #scene:active{cursor:grabbing}
+  button{font:inherit;cursor:pointer;border:0;border-radius:999px;padding:8px 14px;background:var(--ink);color:#fff;font-weight:600}
+  button.alt{background:#fff;color:var(--ink);box-shadow:inset 0 0 0 2px var(--ink)}
+  button.pink{background:var(--pink)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  select,input[type=text],input[type=url]{font:inherit;padding:8px 10px;border-radius:10px;border:2px solid var(--ink);background:#fff;min-width:0}
+
+  #roomSel{font-weight:700}
+  #topbar{position:fixed;top:12px;left:12px;right:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;pointer-events:none}
+  #topbar > *{pointer-events:auto}
+  #title{background:var(--panel);padding:8px 14px;border-radius:14px;box-shadow:var(--shadow);margin-right:auto}
+  #title b{display:block;font-size:15px}
+  #title span{font-size:12px;color:var(--muted)}
+
+  #help{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;padding:6px 14px;border-radius:999px;font-size:13px;white-space:nowrap}
+  #status{position:fixed;left:12px;bottom:14px;background:var(--panel);padding:6px 12px;border-radius:12px;font-size:12px;box-shadow:var(--shadow);max-width:46vw}
+  #status:empty{display:none}
+
+  #info{position:fixed;right:12px;bottom:14px;width:min(300px,calc(100vw - 24px));background:var(--panel);border-radius:16px;padding:14px;box-shadow:var(--shadow)}
+  #info h3{margin:0 0 4px;font-size:16px}
+  #info p{margin:2px 0;font-size:13px;color:var(--muted)}
+  #info .row{display:flex;gap:8px;margin-top:10px}
+  #info a{color:var(--pink);font-weight:700;font-size:13px}
+  .rar{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--yellow);color:var(--ink)}
+
+  #touch{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);display:none;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,56px);gap:6px}
+  #touch button{border-radius:14px;padding:0;font-size:22px;background:rgba(255,255,255,.85);color:var(--ink)}
+  #touch [data-k=up]{grid-column:2;grid-row:1}
+  #touch [data-k=left]{grid-column:1;grid-row:2}
+  #touch [data-k=down]{grid-column:2;grid-row:2}
+  #touch [data-k=right]{grid-column:3;grid-row:2}
+  @media (pointer:coarse){ #touch{display:grid} #help{display:none} }
+
+  #editor{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+  #editor[hidden],#info[hidden]{display:none}
+  .card{background:var(--paper);border-radius:20px;box-shadow:var(--shadow);width:min(760px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:20px}
+  .card h2{margin:0 0 4px}
+  .card .sub{margin:0 0 14px;color:var(--muted);font-size:14px}
+  .field{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+  .field label{font-weight:700;font-size:14px;min-width:120px}
+  .sizes button{padding:6px 14px}
+  .sizes button.on{background:var(--pink)}
+  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin:12px 0}
+  .series-head{grid-column:1/-1;font-weight:800;margin-top:6px}
+  #btnMissing.on{background:var(--ink);color:#fff}
+  .tile{position:relative;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 0 0 2px #e6dfd4;cursor:pointer;user-select:none}
+  .tile img{display:block;width:100%;aspect-ratio:1;object-fit:cover}
+  .tile div{padding:4px 6px;font-size:11px;line-height:1.3}
+  .tile.on{box-shadow:0 0 0 3px var(--pink)}
+  .tile.on::after{content:"✓";position:absolute;top:6px;right:6px;background:var(--pink);color:#fff;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:13px}
+  #count{font-weight:700}
+  .box{background:#fff;border-radius:14px;padding:12px;margin-top:14px;box-shadow:0 0 0 2px #e6dfd4}
+  .box h4{margin:0 0 6px}
+  #testResult{font-size:13px;margin-top:6px}
+  #testResult img{height:60px;border-radius:8px;vertical-align:middle;margin-right:8px}
+  #shareOut{width:100%;margin-top:8px;font-size:12px}
+  .actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px}
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<div id="topbar">
+  <div id="title"><b id="galleryTitle">MetaMuseX 3D Gallery</b><span id="gallerySub">Curated by @collector</span></div>
+  <select id="roomSel" aria-label="Room"></select>
+  <select id="styleSel" aria-label="Exhibition style">
+    <option value="classic">Classic</option>
+    <option value="pop">Pop</option>
+    <option value="dark">Dark Room</option>
+  </select>
+  <button id="btnMissing" class="alt" hidden>👻 Show missing</button>
+  <button id="btnCurate" class="alt">✏️ Curate</button>
+  <button id="btnShare" class="pink">🔗 Share</button>
+</div>
+
+<div id="help">↑ ↓ walk · ← → turn · drag to look around · click a work for details</div>
+<div id="status"></div>
+
+<div id="info" hidden>
+  <span class="rar" id="infoRar"></span>
+  <h3 id="infoName"></h3>
+  <p id="infoCol"></p>
+  <div class="row"><a id="infoLink" href="#" target="_blank" rel="noopener">View on OpenSea ↗</a></div>
+</div>
+
+<div id="touch">
+  <button data-k="up" aria-label="Walk forward">▲</button>
+  <button data-k="left" aria-label="Turn left">◀</button>
+  <button data-k="down" aria-label="Walk back">▼</button>
+  <button data-k="right" aria-label="Turn right">▶</button>
+</div>
+
+<div id="editor" hidden>
+  <div class="card">
+    <h2>Curate your gallery</h2>
+    <p class="sub">Each collection is a room. Pick a collection, choose its works, then share the link.</p>
+
+    <div class="field">
+      <label for="curatorName">Curator name</label>
+      <input type="text" id="curatorName" maxlength="24" placeholder="collector">
+    </div>
+    <div class="field">
+      <label for="colSel">Collection</label>
+      <select id="colSel"></select>
+    </div>
+    <div class="field sizes">
+      <label>Works per room</label>
+      <button data-size="6">6</button><button data-size="9">9</button><button data-size="12">12</button>
+    </div>
+    <div class="field">
+      <label>Selection</label>
+      <button id="btnRarest" class="alt">✨ Pick the rarest</button>
+      <button id="btnRarestAll" class="alt">✨ Rarest in every room</button>
+      <button id="btnClear" class="alt">Clear this room</button>
+      <span><span id="count">0</span> in this room</span>
+    </div>
+
+    <div id="grid"></div>
+
+    <div class="box">
+      <h4>🧪 Image test</h4>
+      <div style="font-size:13px;color:var(--muted)">Paste the address of an NFT image (on OpenSea: right-click the image → "Copy image address") to check if it can hang on a 3D wall.</div>
+      <div class="field">
+        <input type="url" id="testUrl" placeholder="https://..." style="flex:1">
+        <button id="btnTest">Test</button>
+      </div>
+      <div id="testResult"></div>
+    </div>
+
+    <div class="box" id="shareBox" hidden>
+      <h4>🔗 Your gallery link</h4>
+      <input type="text" id="shareOut" readonly>
+      <div id="shareMsg" style="font-size:13px;margin-top:6px"></div>
+    </div>
+
+    <div class="actions">
+      <button id="btnClose" class="alt">Close</button>
+      <button id="btnBuild" class="pink">Open gallery</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+/* =========================================================
+   MetaMuseX 3D Gallery
+   - Opened from the Collector Album:  gallery3d.html?w=<wallet>&edit=1
+     (the owner can curate and share)
+   - Opened from a shared link:        gallery3d.html?w=<wallet>&n=...&c=...&s=...
+     (visitors walk the gallery; works no longer owned are hidden)
+   - Opened with no wallet: demo mode with placeholder artworks.
+   Data comes from the same Cloudflare Worker used by collector-album.html.
+   ========================================================= */
+const OPENSEA_PROXY_BASE = "https://metamusex-proxy.metamusex.workers.dev";
+const CONFIG = { SIZES: [6, 9, 12], DEFAULT_SIZE: 9 };
+
+// Same collections as ALBUM_GROUPS in collector-album.html (keep in sync when adding one).
+const ALBUM_GROUPS = [
+  { key: "girls",   label: "Girls",        chain: "matic",     slug: "metamusex-pfp",          hue: 330 },
+  { key: "men",     label: "Men",          chain: "ethereum",  slug: "metamusex-men-official", hue: 205 },
+  { key: "summer",  label: "Summer Vibes", chain: "robinhood", slug: "metamusex-summer-vibes", hue: 25 },
+  { key: "onefone", label: "1/1",          chain: "matic",     slug: "metamusex-custom",       hue: 350, special: true, unique: true },
+  { key: "3dbase",  label: "3D",           chain: "matic",     slug: "metamusex-3d",           hue: 160, special: true },
+  { key: "farm",    label: "Dolly's Farm", chain: "matic",     slug: "dolly-s-farm-pol",       hue: 40 },
+  { key: "crazy",   label: "Crazy Dolly",  chain: "base",      slug: "crazydolly-men",         hue: 275 },
+  { key: "dolly3d", label: "Dolly 3D",     chain: "base",      slug: "dolly3d",                hue: 190, special: true },
+  { key: "dollygenesis", label: "Dollygenesis", chain: "matic", slug: "dollygenesis",          hue: 120, special: true },
+  // Muse Battle prizes: one room gathering the prize pieces listed in MUSE_BATTLE_PRIZES (from several contracts)
+  { key: "musebattle", label: "Muse Battle Prizes", chain: "matic", slug: "", hue: 15, special: true, airdrop: true, prizes: true },
+  // Airdrop collections — same as AIRDROP_SECTIONS in collector-album.html; split into rooms of 12 in creation order
+  { key: "exvol2",  label: "MetaMuseX Exclusive Vol. 2", chain: "matic", slug: "metamusex-exclusive-vol-2", hue: 300, special: true, airdrop: true, split: true },
+  { key: "exmmx",   label: "Exclusive MetaMuseX",        chain: "matic", slug: "exclusive-metamusex",       hue: 260, special: true, airdrop: true, split: true },
+  { key: "dollyex", label: "Dolly Exclusive",            chain: "matic", slug: "dolly-exclusive",           hue: 60,  special: true, airdrop: true, split: true }
+];
+// Muse Battle prize pieces (Polygon), in the order they were created. Add new prizes at the END of the list.
+const MUSE_BATTLE_PRIZES = [
+  ["0xa0f83a1972dff5503fc8c2b8214d44806bd11cec", 25],
+  ["0x2a3dffd778fab8ea589730b8e7516ac7df842862", 51],
+  ["0x2a3dffd778fab8ea589730b8e7516ac7df842862", 57],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 31],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 34],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 39],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 41],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 44],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 46],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 47],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 48],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 62],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 63],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 68],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 70],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 74],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 76],
+  ["0x0b8c418cef5297dbe6b63dcfc3b181693a7074d6", 82]
+];
+const prizeIndex = (contract, id) => MUSE_BATTLE_PRIZES.findIndex(([c, i]) => c === String(contract || "").toLowerCase() && String(i) === String(id));
+const SPLIT_ROOM_SIZE = 12;
+const COLLECTIONS = Object.fromEntries(ALBUM_GROUPS.map(g => [g.key, g]));
+const HIDDEN_TRAIT_TYPES = new Set(["rarity rank"]);
+
+// 1/1 series — same as SPECIAL_SERIES.onefone in collector-album.html (keep in sync when adding pieces)
+const ONEFONE_SERIES = {
+  "Celestial Mysteries": [16, 30, 113],
+  "Customization & Collabs": [1, 2, 3, 19, 20, 25, 29, 33, 35, 38, 43, 50, 52, 53, 59, 60, 63, 68, 70, 82, 87, 88, 89, 90, 91, 92, 93, 94, 96, 97, 110, 111, 138, 139],
+  "Delicious": [115],
+  "Eternal Nightmares": [18],
+  "Event Gems": [5, 7, 42, 48, 49, 54, 80, 123],
+  "Folklore Fables": [66],
+  "Game World Chronicles": [74, 78],
+  "Ink and Speech Bubbles": [10, 21, 69, 71, 79, 81, 83, 98, 99, 100, 101, 102, 103, 121, 122, 126, 130],
+  "Mythic Echoes": [32, 58, 62, 67],
+  "Nature's Wonders": [4, 13, 26, 27, 28, 31, 57, 118, 136, 137],
+  "Once Upon a Time": [8, 11, 12, 15, 17, 22, 23, 24, 34, 41, 45, 51, 55, 95],
+  "Pink Legends": [76],
+  "Portraits of the Soul": [61, 73, 84, 85, 86, 106, 109],
+  "Pursuits Palette": [6, 14, 36, 44, 47, 120, 135],
+  "Screen Characters": [9, 39, 40, 56, 65, 72, 75, 77, 104, 105, 107, 108, 112, 114, 116, 117, 119, 124, 125, 127, 128, 129, 131, 132, 133, 134],
+  "Simply MetaMuseX": [46, 64],
+  "Zodiac Rebels": [37],
+};
+const ONEFONE_SERIES_BY_NUM = {};
+Object.entries(ONEFONE_SERIES).forEach(([name, nums]) => nums.forEach(n => ONEFONE_SERIES_BY_NUM[n] = name));
+function seriesOfNft(name, identifier){
+  const m = String(name || "").match(/MMX\s*0*(\d+)/i);
+  if (m && ONEFONE_SERIES_BY_NUM[m[1]]) return ONEFONE_SERIES_BY_NUM[m[1]];
+  return ONEFONE_SERIES_BY_NUM[String(identifier)] || "Other works";
+}
+
+// rarityCount = how many pieces in the collection share this NFT's rarest trait (lower = rarer)
+function rarityLabel(item){
+  if (item.unique) return "1 of 1";
+  if (item.collection === "musebattle") return "Muse Battle prize";
+  if (COLLECTIONS[item.collection]?.airdrop) return "Airdrop";
+  const c = item.rarityCount;
+  if (c == null) return "Special edition";
+  if (c <= 1) return "Unique trait";
+  if (c <= 5) return "Ultra rare";
+  if (c <= 20) return "Rare";
+  return "Collected";
+}
+function rarityDetail(item){
+  if (item.unique) return "One-of-a-kind artwork";
+  if (COLLECTIONS[item.collection]?.airdrop) return "Community airdrop";
+  if (item.rarityCount == null) return COLLECTIONS[item.collection]?.label || "";
+  return `${item.rarityTrait} · only ${item.rarityCount} in existence`;
+}
+// sort key for "Pick the rarest": 1/1 pieces first, then by rarest trait, then special editions
+function raritySortKey(item){
+  if (item.unique) return 1;
+  if (item.rarityCount != null) return item.rarityCount;
+  return 100000;
+}
+
+/* ---------- demo data (no wallet in the link) ---------- */
+function demoInventory(){
+  const keys = ["girls", "men", "3dbase", "farm", "crazy"], out = [];
+  let seed = 7;
+  const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  for (let i = 0; i < 24; i++){
+    const col = keys[i % keys.length];
+    const token = 10 + i * 8 + Math.floor(rnd() * 7);
+    out.push({
+      key: col + "-" + token, collection: col, tokenId: token,
+      name: COLLECTIONS[col].label + " #" + token,
+      rarityCount: 1 + Math.floor(rnd() * rnd() * 80), rarityTrait: "Demo trait",
+      image: null, openseaUrl: "https://opensea.io/"
+    });
+  }
+  return out;
+}
+
+/* ---------- real data via the Worker ---------- */
+async function fetchJson(url, retries = 3){
+  for (let attempt = 0; attempt <= retries; attempt++){
+    try {
+      const res = await fetch(url, { headers: { accept: "application/json" } });
+      if (res.status === 429 && attempt < retries){ await new Promise(r => setTimeout(r, 700 * 2 ** attempt)); continue; }
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) {
+      if (attempt === retries) return null;
+      await new Promise(r => setTimeout(r, 700 * 2 ** attempt));
+    }
+  }
+  return null;
+}
+async function fetchOwned(wallet, g){
+  const d = await fetchJson(`${OPENSEA_PROXY_BASE}/api/v2/chain/${g.chain}/account/${wallet}/nfts?collection=${g.slug}&limit=200`);
+  return (d && d.nfts) || [];
+}
+async function fetchTraitCounts(g){
+  if (g.special) return null;
+  const d = await fetchJson(`${OPENSEA_PROXY_BASE}/api/v2/traits/${g.slug}`);
+  if (!d || !d.counts) return null;
+  const counts = {};
+  Object.keys(d.counts).forEach(tt => {
+    const type = String(tt).trim();
+    if (HIDDEN_TRAIT_TYPES.has(type.toLowerCase())) return;
+    counts[type] = counts[type] || {};
+    Object.entries(d.counts[tt] || {}).forEach(([v, n]) => {
+      const val = String(v).trim(); counts[type][val] = (counts[type][val] || 0) + (n || 0);
+    });
+  });
+  return counts;
+}
+function resolveImageUrl(url){
+  if (!url) return "";
+  if (url.startsWith("ipfs://")) return "https://ipfs.io/ipfs/" + url.slice(7).replace(/^ipfs\//, "");
+  if (url.startsWith("ar://")) return "https://arweave.net/" + url.slice(5);
+  return url;
+}
+function toItem(g, nft, counts){
+  let best = null;
+  if (counts){
+    (nft.traits || []).forEach(t => {
+      const type = String(t.trait_type).trim(), val = String(t.value).trim();
+      const n = counts[type] && counts[type][val];
+      if (typeof n === "number" && n > 0 && (!best || n < best.n)) best = { n, label: `${type}: ${val}` };
+    });
+  }
+  return {
+    key: g.key + "-" + nft.identifier,
+    collection: g.key, tokenId: Number(nft.identifier) || 0,
+    name: nft.name || `${g.label} #${nft.identifier}`,
+    unique: !!g.unique,
+    series: g.key === "onefone" ? seriesOfNft(nft.name, nft.identifier) : "",
+    rarityCount: best ? best.n : null, rarityTrait: best ? best.label : "",
+    image: resolveImageUrl(nft.image_url || nft.display_image_url || nft.image || ""),
+    openseaUrl: nft.opensea_url || `https://opensea.io/assets/${g.chain}/${nft.contract}/${nft.identifier}`
+  };
+}
+async function withConcurrency(list, limit, fn){
+  let i = 0;
+  const worker = async () => { while (i < list.length){ const cur = list[i++]; await fn(cur); } };
+  await Promise.all(Array.from({ length: Math.min(limit, list.length) }, worker));
+}
+// full catalogs (owned + not owned) for collections that can show missing pieces: 1/1 and airdrops
+const catalogs = {};
+const canShowMissing = col => col === "onefone" || !!COLLECTIONS[col]?.airdrop;
+// how many owned works a room can hold: 1/1 and airdrops = all (grouped in rooms), others = chosen size (6/9/12)
+function limitFor(col){
+  if (col === "onefone" || COLLECTIONS[col]?.airdrop) return Infinity;
+  return state.size;
+}
+// the Muse Battle room always shows the prizes still to win; other rooms only with "Show missing"
+const missingOn = col => canShowMissing(col) && (col === "musebattle" || state.showMissing);
+const noLimit = col => col === "onefone" || !!COLLECTIONS[col]?.airdrop;
+const hasSubRooms = col => col === "onefone" || !!COLLECTIONS[col]?.split;
+function prizeItem(idx, nft){
+  const [contract, id] = MUSE_BATTLE_PRIZES[idx];
+  return {
+    key: "musebattle-" + idx, collection: "musebattle", tokenId: idx + 1,
+    name: (nft && nft.name) || `Muse Battle Prize #${id}`, unique: false, series: "",
+    rarityCount: null, rarityTrait: "",
+    image: nft ? resolveImageUrl(nft.image_url || nft.display_image_url || nft.image || "") : "",
+    openseaUrl: `https://opensea.io/item/polygon/${contract}/${id}`
+  };
+}
+async function fetchOwnedPrizes(wallet){
+  const out = [];
+  let next = "";
+  for (let page = 0; page < 5; page++){
+    const d = await fetchJson(`${OPENSEA_PROXY_BASE}/api/v2/chain/matic/account/${wallet}/nfts?limit=200${next ? "&next=" + encodeURIComponent(next) : ""}`);
+    if (!d) break;
+    (d.nfts || []).forEach(n => { const i = prizeIndex(n.contract, n.identifier); if (i >= 0) out.push(prizeItem(i, n)); });
+    next = d.next; if (!next) break;
+  }
+  return out;
+}
+// exclusive collections: room number from the position in the full collection (creation order)
+function assignSplitRooms(col, owned){
+  const cat = catalogs[col] || [];
+  const roomOf = new Map();
+  cat.forEach((it, i) => { it.series = "Room " + (Math.floor(i / SPLIT_ROOM_SIZE) + 1); roomOf.set(it.key, it.series); });
+  owned.filter(i => i.collection === col).sort((a, b) => a.tokenId - b.tokenId).forEach((it, i) => {
+    it.series = roomOf.get(it.key) || "Room " + (Math.floor(i / SPLIT_ROOM_SIZE) + 1);
+  });
+}
+async function loadCatalog(col){
+  if (catalogs[col]) return catalogs[col];
+  const g = COLLECTIONS[col], all = [];
+  if (!g || !state.wallet){ catalogs[col] = all; return all; }
+  if (g.prizes){
+    await withConcurrency(MUSE_BATTLE_PRIZES.map((p, i) => i), 6, async i => {
+      const [c, id] = MUSE_BATTLE_PRIZES[i];
+      const d = await fetchJson(`${OPENSEA_PROXY_BASE}/api/v2/chain/matic/contract/${c}/nfts/${id}`);
+      all.push(prizeItem(i, d && d.nft));
+    });
+    all.sort((a, b) => a.tokenId - b.tokenId);
+    catalogs[col] = all;
+    return all;
+  }
+  let next = "";
+  for (let page = 0; page < 5; page++){
+    const d = await fetchJson(`${OPENSEA_PROXY_BASE}/api/v2/collection/${g.slug}/nfts?limit=200${next ? "&next=" + encodeURIComponent(next) : ""}`);
+    if (!d) break;
+    (d.nfts || []).forEach(n => { if (prizeIndex(n.contract, n.identifier) < 0) all.push(toItem(g, n, null)); });
+    next = d.next; if (!next) break;
+  }
+  all.sort((a, b) => a.tokenId - b.tokenId);
+  catalogs[col] = all;
+  return all;
+}
+
+// onlyGroups: when visiting a shared link, load just the collections the gallery uses
+async function loadOwnedNFTs(wallet, onlyGroups){
+  if (!wallet) return demoInventory();
+  const groups = onlyGroups ? ALBUM_GROUPS.filter(g => onlyGroups.has(g.key)) : ALBUM_GROUPS;
+  const out = [];
+  await withConcurrency(groups, 3, async g => {
+    if (g.prizes){ (await fetchOwnedPrizes(wallet)).forEach(i => out.push(i)); return; }
+    const [nfts, counts] = await Promise.all([fetchOwned(wallet, g), fetchTraitCounts(g)]);
+    // prize pieces live ONLY in the Muse Battle room, never in their original collection
+    nfts.forEach(n => { if (prizeIndex(n.contract, n.identifier) < 0) out.push(toItem(g, n, counts)); });
+  });
+  // exclusive collections need their full list to know which room each piece belongs to
+  const splitOwned = groups.filter(g => g.split && out.some(i => i.collection === g.key));
+  await withConcurrency(splitOwned, 3, async g => { await loadCatalog(g.key); assignSplitRooms(g.key, out); });
+  const order = ALBUM_GROUPS.map(g => g.key);
+  out.sort((a, b) => order.indexOf(a.collection) - order.indexOf(b.collection) || a.tokenId - b.tokenId);
+  return out;
+}
+
+/* ---------- placeholder art ---------- */
+const placeholderCache = new Map();
+function placeholderCanvas(item, blockedNote){
+  const c = document.createElement("canvas"); c.width = c.height = 512;
+  const g = c.getContext("2d"), h = COLLECTIONS[item.collection]?.hue ?? 0;
+  const grad = g.createLinearGradient(0, 0, 512, 512);
+  grad.addColorStop(0, `hsl(${h},85%,70%)`); grad.addColorStop(1, `hsl(${(h+60)%360},80%,45%)`);
+  g.fillStyle = grad; g.fillRect(0, 0, 512, 512);
+  let s = item.tokenId * 13 + 1;
+  const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 9; i++){
+    g.fillStyle = `hsla(${(h + r()*120)%360},90%,${50 + r()*30}%,.55)`;
+    g.beginPath(); g.arc(r()*512, r()*512, 30 + r()*110, 0, Math.PI*2); g.fill();
+  }
+  g.fillStyle = "rgba(255,255,255,.9)"; g.fillRect(0, 400, 512, 112);
+  g.fillStyle = "#1d1b22"; g.font = "bold 44px system-ui,sans-serif"; g.textAlign = "center";
+  g.fillText(fitText(g, item.name, 480, 44, "bold"), 256, 452);
+  g.font = "24px system-ui,sans-serif";
+  g.fillText(blockedNote || COLLECTIONS[item.collection]?.label || "", 256, 490);
+  return c;
+}
+function placeholderURL(item){
+  if (!placeholderCache.has(item.key)) placeholderCache.set(item.key, placeholderCanvas(item).toDataURL("image/jpeg", .85));
+  return placeholderCache.get(item.key);
+}
+
+/* ---------- image loading with CORS diagnosis ---------- */
+// resolves {status:'ok'|'blocked'|'broken', img}
+function probeImage(url){
+  return new Promise(resolve => {
+    const a = new Image(); a.crossOrigin = "anonymous";
+    a.onload = () => resolve({ status: "ok", img: a });
+    a.onerror = () => {
+      const b = new Image();
+      b.onload = () => resolve({ status: "blocked", img: null });
+      b.onerror = () => resolve({ status: "broken", img: null });
+      b.src = url;
+    };
+    a.src = url;
+  });
+}
+
+/* ---------- state ---------- */
+const state = {
+  inventory: [], selected: [], size: CONFIG.DEFAULT_SIZE,
+  curator: "collector", style: "classic", wallet: "", canEdit: false, room: "", filter: "", showMissing: false,
+  imgStats: { ok: 0, blocked: 0, broken: 0 }
+};
+const SAVE_PREFIX = "metamusex-gallery3d:";
+
+function readURL(){
+  const p = new URLSearchParams(location.search);
+  const w = (p.get("w") || "").trim();
+  if (/^0x[0-9a-fA-F]{40}$/.test(w)) state.wallet = w.toLowerCase();
+  state.canEdit = !state.wallet || p.get("edit") === "1";
+  if (p.get("c")) state.curator = cleanName(p.get("c"));
+  if (["classic","pop","dark"].includes(p.get("s"))) state.style = p.get("s");
+  return (p.get("n") || "").split(",").filter(Boolean).slice(0, 120);
+}
+function cleanName(v){ return String(v).replace(/[^\w.\- ]/g, "").trim().slice(0, 24) || "collector"; }
+function shareURL(){
+  const p = new URLSearchParams();
+  if (state.wallet) p.set("w", state.wallet);
+  p.set("c", state.curator); p.set("s", state.style);
+  p.set("n", state.selected.join(","));
+  return location.origin + location.pathname + "?" + p.toString();
+}
+// the owner's own choices are remembered in this browser (only a convenience: the link is what's shared)
+function saveOwnerChoices(){
+  if (!state.wallet || !state.canEdit) return;
+  try { localStorage.setItem(SAVE_PREFIX + state.wallet, JSON.stringify({ v: 2, known: ownedCollections(), selected: state.selected, size: state.size, style: state.style, curator: state.curator, room: state.room })); } catch (e) {}
+}
+function loadOwnerChoices(){
+  try {
+    const saved = JSON.parse(localStorage.getItem(SAVE_PREFIX + state.wallet) || "null");
+    if (saved) return saved;
+    // first time: use the username from the Collector Profile, if set in this browser
+    const prof = JSON.parse(localStorage.getItem("metamusex-profile:" + state.wallet) || "null");
+    if (prof && prof.username) return { curator: prof.username };
+  } catch (e) {}
+  return null;
+}
+
+/* ---------- three.js scene ---------- */
+const canvas = document.getElementById("scene");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+const ANISO = renderer.capabilities.getMaxAnisotropy();
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 100);
+const EYE = 1.6;
+let room = new THREE.Group(); scene.add(room);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.9); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 0.35); sun.position.set(3, 8, 4); scene.add(sun);
+
+const STYLES = {
+  classic: { wall: 0xf1ebe1, floor: 0x9a7552, ceil: 0xfaf7f2, frame: 0xb8923a, plaque: "#fffaf3", ink: "#1d1b22", fog: 0xf1ebe1, hemi: .95, bg: 0xf1ebe1 },
+  pop:     { wall: 0xffd6ea, floor: 0xffffff, floor2: 0xffb3d6, ceil: 0xfff3b0, frame: 0xff4f9a, plaque: "#ffd23f", ink: "#1d1b22", fog: 0xffd6ea, hemi: 1.0, bg: 0xffd6ea },
+  dark:    { wall: 0x1c1b24, floor: 0x0c0c10, ceil: 0x121218, frame: 0x2a2a33, plaque: "#1c1b24", ink: "#f4efe6", fog: 0x0c0c10, hemi: .35, bg: 0x0c0c10 }
+};
+
+let bounds = 5;
+const artMeshes = [];
+
+function floorTexture(st){
+  const c = document.createElement("canvas"); c.width = c.height = 256;
+  const g = c.getContext("2d"), hex = v => "#" + new THREE.Color(v).getHexString();
+  if (st.floor2 !== undefined){
+    // Pop: soft two-colour checkerboard
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++){
+      g.fillStyle = (x + y) % 2 ? hex(st.floor2) : hex(st.floor); g.fillRect(x*64, y*64, 64, 64);
+    }
+  } else {
+    g.fillStyle = hex(st.floor); g.fillRect(0, 0, 256, 256);
+    g.strokeStyle = "rgba(0,0,0,.18)"; g.lineWidth = 3;
+    for (let i = 0; i <= 256; i += 64){ g.beginPath(); g.moveTo(0, i); g.lineTo(256, i); g.stroke(); }
+    for (let y = 0; y < 4; y++){ const off = (y % 2) * 128; for (let x = off; x <= 256; x += 256){ g.beginPath(); g.moveTo(x, y*64); g.lineTo(x, y*64+64); g.stroke(); } }
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; t.anisotropy = ANISO;
+  return t;
+}
+function fitText(g, text, maxW, size, weight){
+  let fs = size;
+  do { g.font = `${weight} ${fs}px system-ui,sans-serif`; } while (g.measureText(text).width > maxW && --fs > 14);
+  if (g.measureText(text).width > maxW){
+    while (text.length > 3 && g.measureText(text + "…").width > maxW) text = text.slice(0, -1);
+    text += "…";
+  }
+  return text;
+}
+// splits a title into at most 2 lines that fit maxW, shrinking the font only if needed
+function wrapTitle(g, text, maxW, size){
+  for (let fs = size; fs >= 30; fs -= 4){
+    g.font = `bold ${fs}px system-ui,sans-serif`;
+    if (g.measureText(text).width <= maxW) return { fs, lines: [text] };
+    const words = text.split(" ");
+    for (let cut = words.length - 1; cut > 0; cut--){
+      const l1 = words.slice(0, cut).join(" "), l2 = words.slice(cut).join(" ");
+      if (g.measureText(l1).width <= maxW && g.measureText(l2).width <= maxW) return { fs, lines: [l1, l2] };
+    }
+  }
+  g.font = "bold 30px system-ui,sans-serif";
+  return { fs: 30, lines: [fitText(g, text, maxW, 30, "bold")] };
+}
+function plaqueTexture(item, st){
+  const W = 1024, H = 256, maxW = W - 70;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  g.fillStyle = st.plaque; g.fillRect(0, 0, W, H);
+  g.fillStyle = st.ink; g.textAlign = "center"; g.textBaseline = "middle";
+  // plaque shows only the NFT name, centred (up to 2 lines)
+  const t1 = wrapTitle(g, item.name, maxW, 84);
+  const lh = t1.fs * 1.15, top = H / 2 - (t1.lines.length - 1) * lh / 2;
+  g.font = `bold ${t1.fs}px system-ui,sans-serif`;
+  t1.lines.forEach((l, i) => g.fillText(l, W/2, top + i * lh));
+  const t = new THREE.CanvasTexture(c);
+  t.encoding = THREE.sRGBEncoding;
+  t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; t.magFilter = THREE.LinearFilter;
+  return t;
+}
+
+const ROOM_TITLES = {
+  girls: "MetaMuseX - Girl", men: "MetaMuseX - Men", summer: "MetaMuseX Summer Vibes",
+  onefone: "MetaMuseX 1/1", "3dbase": "MetaMuseX 3D", farm: "Dolly's Farm",
+  crazy: "CrazyDolly", dolly3d: "Dolly 3D", dollygenesis: "Dollygenesis", musebattle: "Muse Battle Prizes",
+  exvol2: "MetaMuseX Exclusive Vol. 2 · Airdrop", exmmx: "Exclusive MetaMuseX · Airdrop", dollyex: "Dolly Exclusive · Airdrop"
+};
+function roomSignTexture(st){
+  const W = 2048, H = 256;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  const col = roomCol(state.room), ser = roomSeries(state.room);
+  const title = ROOM_TITLES[col] || COLLECTIONS[col]?.label || "";
+  const line1 = ser ? `${title} — ${ser}` : title;
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillStyle = "#" + new THREE.Color(st.frame).getHexString();
+  g.fillText(fitText(g, line1.toUpperCase(), W - 80, 120, "900"), W/2, 95);
+  g.fillStyle = st.ink;
+  g.fillText(fitText(g, "Curated by @" + state.curator, W - 80, 56, "600"), W/2, 205);
+  const t = new THREE.CanvasTexture(c);
+  t.encoding = THREE.sRGBEncoding; t.generateMipmaps = false; t.minFilter = THREE.LinearFilter;
+  return t;
+}
+
+function disposeGroup(group){
+  group.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material){ [].concat(o.material).forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); }
+  });
+}
+
+function buildRoom(items){
+  scene.remove(room); disposeGroup(room);
+  room = new THREE.Group(); scene.add(room);
+  artMeshes.length = 0;
+  state.imgStats = { ok: 0, blocked: 0, broken: 0 };
+  const st = STYLES[state.style];
+  scene.background = new THREE.Color(st.bg);
+  hemi.intensity = st.hemi;
+
+  const n = Math.max(items.length, 1);
+  const perWall = [0,0,0,0].map((_, w) => Math.floor(n / 4) + (w < n % 4 ? 1 : 0));
+  const SPACING = 3.4, H = 5.4;
+  const L = Math.max(10, Math.max(...perWall) * SPACING + 2.6), half = L / 2;
+  bounds = half - 0.7;
+
+  const floorTex = floorTexture(st); floorTex.repeat.set(L / 4, L / 4);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(L, L), new THREE.MeshStandardMaterial({ map: floorTex, roughness: .8 }));
+  floor.rotation.x = -Math.PI / 2; room.add(floor);
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(L, L), new THREE.MeshStandardMaterial({ color: st.ceil }));
+  ceil.rotation.x = Math.PI / 2; ceil.position.y = H; room.add(ceil);
+
+  const wallMat = new THREE.MeshStandardMaterial({ color: st.wall, roughness: .95 });
+  // walls: 0 north(-z), 1 east(+x), 2 south(+z), 3 west(-x); rotation makes them face inward
+  const WALLS = [
+    { pos: [0, H/2, -half], rotY: 0 },
+    { pos: [half, H/2, 0],  rotY: -Math.PI/2 },
+    { pos: [0, H/2, half],  rotY: Math.PI },
+    { pos: [-half, H/2, 0], rotY: Math.PI/2 }
+  ];
+  WALLS.forEach(w => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(L, H), wallMat);
+    m.position.set(...w.pos); m.rotation.y = w.rotY; room.add(m);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(L, .18, .06), new THREE.MeshStandardMaterial({ color: st.frame }));
+    base.position.set(...w.pos); base.position.y = .09; base.rotation.y = w.rotY;
+    base.translateZ(.03); room.add(base);
+  });
+
+  // room name painted on the wall in front of the entrance and above the entrance
+  if (state.room){
+    const signTex = roomSignTexture(st);
+    [[0, -half + .02, 0], [0, half - .02, Math.PI]].forEach(([x, z, ry]) => {
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(L - 1, 9), Math.min(L - 1, 9) / 8),
+        new THREE.MeshBasicMaterial({ map: signTex, transparent: true }));
+      sign.position.set(x, 4.35, z); sign.rotation.y = ry; room.add(sign);
+    });
+  }
+
+  const frameMat = new THREE.MeshStandardMaterial({ color: st.frame, metalness: .5, roughness: .4 });
+  const lampMat = new THREE.MeshBasicMaterial({ color: 0xfff4d6 });
+  let idx = 0;
+  WALLS.forEach((w, wi) => {
+    const k = perWall[wi];
+    for (let j = 0; j < k; j++, idx++){
+      const item = items[idx]; if (!item) continue;
+      const g = new THREE.Group();
+      g.position.set(...w.pos); g.position.y = 0; g.rotation.y = w.rotY;
+      g.translateX((j - (k - 1) / 2) * SPACING);
+
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(2.3, 2.3, .12), frameMat);
+      frame.position.set(0, 2.0, .06); g.add(frame);
+      const artMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const art = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), artMat);
+      art.position.set(0, 2.0, .16); art.userData.item = item; g.add(art);
+      artMeshes.push(art);
+      applyArtTexture(artMat, item);
+
+      const plaque = new THREE.Mesh(new THREE.PlaneGeometry(1.9, .475), new THREE.MeshBasicMaterial({ map: plaqueTexture(item, st) }));
+      plaque.position.set(0, .55, .05); g.add(plaque);
+
+      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(.05, .12, .22, 16), lampMat);
+      lamp.position.set(0, 3.45, .25); lamp.rotation.x = .5; g.add(lamp);
+      const spot = new THREE.SpotLight(0xfff1d0, state.style === "dark" ? 2.2 : 1.0, 6, .6, .5);
+      spot.position.set(0, 3.4, 1.2); spot.target.position.set(0, 2, 0);
+      g.add(spot); g.add(spot.target);
+
+      room.add(g);
+    }
+  });
+
+  camera.position.set(0, EYE, half - 1.5);
+  view.yaw = 0; view.pitch = 0;
+  updateTitle(); updateStatus();
+}
+
+const texLoader = new THREE.TextureLoader();
+function setTex(mat, source){
+  const t = source instanceof HTMLCanvasElement ? new THREE.CanvasTexture(source) : new THREE.Texture(source);
+  t.encoding = THREE.sRGBEncoding; t.anisotropy = ANISO; t.needsUpdate = true;
+  mat.map = t; mat.needsUpdate = true;
+}
+function greyCanvas(img){
+  const c = document.createElement("canvas"); c.width = c.height = 384;
+  const g = c.getContext("2d");
+  g.drawImage(img, 0, 0, 384, 384);
+  const d = g.getImageData(0, 0, 384, 384), p = d.data;
+  for (let i = 0; i < p.length; i += 4){
+    const y = 0.3 * p[i] + 0.59 * p[i+1] + 0.11 * p[i+2];
+    const v = 150 + y * 0.35; // light, washed-out grey
+    p[i] = p[i+1] = p[i+2] = v;
+  }
+  g.putImageData(d, 0, 0);
+  return c;
+}
+function missingCanvas(item){
+  const c = document.createElement("canvas"); c.width = c.height = 384;
+  const g = c.getContext("2d");
+  g.fillStyle = "#c9c6c1"; g.fillRect(0, 0, 384, 384);
+  g.fillStyle = "#8e8a84"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.font = "bold 120px system-ui,sans-serif"; g.fillText("?", 192, 170);
+  g.font = "bold 30px system-ui,sans-serif"; g.fillText(fitText(g, item.name, 340, 30, "bold"), 192, 300);
+  return c;
+}
+async function applyArtTexture(mat, item){
+  if (item.missing){
+    if (!item.image){ setTex(mat, missingCanvas(item)); return; }
+    const r = await probeImage(item.image);
+    let done = false;
+    if (r.status === "ok"){ try { setTex(mat, greyCanvas(r.img)); done = true; } catch (e) {} }
+    if (!done) setTex(mat, missingCanvas(item));
+    return;
+  }
+  if (!item.image){ setTex(mat, placeholderCanvas(item)); return; }
+  const r = await probeImage(item.image);
+  state.imgStats[r.status]++;
+  if (r.status === "ok") setTex(mat, r.img);
+  else setTex(mat, placeholderCanvas(item, r.status === "blocked" ? "image blocked (CORS)" : "image not found"));
+  updateStatus();
+}
+
+/* ---------- controls ---------- */
+const keys = { up: false, down: false, left: false, right: false };
+const KEYMAP = { ArrowUp: "up", KeyW: "up", ArrowDown: "down", KeyS: "down", ArrowLeft: "left", KeyA: "left", ArrowRight: "right", KeyD: "right" };
+const view = { yaw: 0, pitch: 0 };
+const editorEl = document.getElementById("editor");
+addEventListener("keydown", e => {
+  if (!editorEl.hidden) return;
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+  const k = KEYMAP[e.code]; if (k){ keys[k] = true; e.preventDefault(); }
+});
+addEventListener("keyup", e => { const k = KEYMAP[e.code]; if (k) keys[k] = false; });
+addEventListener("blur", () => Object.keys(keys).forEach(k => keys[k] = false));
+
+document.querySelectorAll("#touch button").forEach(b => {
+  const k = b.dataset.k;
+  const on = e => { e.preventDefault(); keys[k] = true; }, off = e => { e.preventDefault(); keys[k] = false; };
+  b.addEventListener("pointerdown", on); b.addEventListener("pointerup", off);
+  b.addEventListener("pointerleave", off); b.addEventListener("pointercancel", off);
+});
+
+let drag = null;
+canvas.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, moved: 0 }; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.moved += Math.abs(dx) + Math.abs(dy); drag.x = e.clientX; drag.y = e.clientY;
+  view.yaw -= dx * 0.004;
+  view.pitch = Math.max(-0.6, Math.min(0.6, view.pitch - dy * 0.003));
+});
+canvas.addEventListener("pointerup", e => {
+  if (drag && drag.moved < 6) pickAt(e.clientX, e.clientY);
+  drag = null;
+});
+
+const ray = new THREE.Raycaster();
+function pickAt(x, y){
+  const r = canvas.getBoundingClientRect();
+  ray.setFromCamera({ x: ((x - r.left) / r.width) * 2 - 1, y: -((y - r.top) / r.height) * 2 + 1 }, camera);
+  const hit = ray.intersectObjects(artMeshes)[0];
+  if (hit) showInfo(hit.object.userData.item, true);
+}
+
+/* ---------- info panel ---------- */
+const infoEl = document.getElementById("info");
+let infoItem = null, infoPinnedUntil = 0;
+function showInfo(item, pinned){
+  if (pinned) infoPinnedUntil = performance.now() + 4000;
+  if (item === infoItem && !infoEl.hidden) return;
+  infoItem = item;
+  if (!item){ infoEl.hidden = true; return; }
+  document.getElementById("infoRar").textContent = item.missing ? "Missing" : rarityLabel(item);
+  document.getElementById("infoName").textContent = item.name;
+  document.getElementById("infoCol").textContent = item.missing
+    ? (item.collection === "onefone" ? `Series "${item.series}" — ` : "") + "not in this collection yet"
+    : (COLLECTIONS[item.collection]?.label || "") + (item.collection === "onefone" ? " · " + item.series : "") + " — " + rarityDetail(item);
+  const link = document.getElementById("infoLink");
+  link.href = item.openseaUrl || "https://opensea.io/";
+  link.textContent = item.missing ? "Get it on OpenSea ↗" : "View on OpenSea ↗";
+  infoEl.hidden = false;
+}
+const tmpV = new THREE.Vector3(), fwd = new THREE.Vector3();
+function nearestFacingArt(){
+  camera.getWorldDirection(fwd);
+  let best = null, bestD = 3.6;
+  for (const m of artMeshes){
+    m.getWorldPosition(tmpV);
+    const d = tmpV.distanceTo(camera.position);
+    if (d > bestD) continue;
+    tmpV.sub(camera.position).normalize();
+    if (tmpV.dot(fwd) > 0.82){ best = m.userData.item; bestD = d; }
+  }
+  return best;
+}
+
+/* ---------- loop ---------- */
+const clock = new THREE.Clock();
+function tick(){
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const turn = (keys.left ? 1 : 0) - (keys.right ? 1 : 0);
+  const move = (keys.up ? 1 : 0) - (keys.down ? 1 : 0);
+  view.yaw += turn * 1.9 * dt;
+  if (move){
+    camera.position.x -= Math.sin(view.yaw) * move * 3.2 * dt;
+    camera.position.z -= Math.cos(view.yaw) * move * 3.2 * dt;
+    camera.position.x = Math.max(-bounds, Math.min(bounds, camera.position.x));
+    camera.position.z = Math.max(-bounds, Math.min(bounds, camera.position.z));
+  }
+  camera.rotation.set(view.pitch, view.yaw, 0, "YXZ");
+  if (performance.now() > infoPinnedUntil) showInfo(nearestFacingArt(), false);
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+function resize(){
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+
+/* ---------- UI ---------- */
+function updateTitle(){
+  const room = state.room && COLLECTIONS[roomCol(state.room)] ? roomLabel(state.room) + " room · " : "";
+  document.getElementById("gallerySub").textContent = room + "Curated by @" + state.curator;
+  document.getElementById("styleSel").value = state.style;
+}
+function updateStatus(){
+  const s = state.imgStats, el = document.getElementById("status");
+  if (!state.wallet && !s.ok && !s.blocked && !s.broken){ el.textContent = "Demo · open it from the Collector Album to see your NFTs"; return; }
+  const parts = [`🖼️ ${s.ok} loaded`];
+  if (s.blocked) parts.push(`⚠️ ${s.blocked} blocked (Worker fix needed)`);
+  if (s.broken) parts.push(`❌ ${s.broken} not found`);
+  el.textContent = parts.join(" · ");
+}
+const colOf = key => key.slice(0, key.lastIndexOf("-"));
+function selectedIn(col){ return state.selected.filter(k => colOf(k) === col); }
+function ownedCollections(){ return ALBUM_GROUPS.map(g => g.key).filter(c => state.inventory.some(i => i.collection === c)); }
+const roomCol = room => String(room).split(":")[0];
+const roomSeries = room => String(room).split(":").slice(1).join(":");
+const byKeyMap = () => new Map(state.inventory.map(i => [i.key, i]));
+// 1/1 works are exhibited by series: one room per series ("onefone:<series>")
+function roomList(){
+  const out = [], byKey = byKeyMap();
+  ALBUM_GROUPS.forEach(g => {
+    const sel = selectedIn(g.key);
+    if (!sel.length) return;
+    if (hasSubRooms(g.key)){
+      const names = [...new Set(sel.map(k => byKey.get(k)?.series).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      names.forEach(n => out.push(g.key + ":" + n));
+    } else out.push(g.key);
+  });
+  return out;
+}
+function roomOwnedItems(room){
+  const byKey = byKeyMap(), col = roomCol(room), ser = roomSeries(room);
+  return selectedIn(col).map(k => byKey.get(k)).filter(i => i && (!ser || i.series === ser));
+}
+function currentItems(){
+  const rooms = roomList();
+  if (!rooms.includes(state.room)) state.room = rooms[0] || "";
+  const items = roomOwnedItems(state.room), col = roomCol(state.room), ser = roomSeries(state.room);
+  if (canShowMissing(col)){
+    if (missingOn(col) && catalogs[col]){
+      const ownedIds = new Set(state.inventory.filter(i => i.collection === col).map(i => i.key));
+      let missing = catalogs[col].filter(i => (!ser || i.series === ser) && !ownedIds.has(i.key));
+      missing.forEach(i => items.push({ ...i, missing: true }));
+    }
+    items.sort((a, b) => a.tokenId - b.tokenId);
+  }
+  return items;
+}
+function roomLabel(room){
+  const ser = roomSeries(room), col = roomCol(room);
+  if (!ser) return COLLECTIONS[col].label;
+  return (col === "onefone" ? "1/1" : COLLECTIONS[col].label) + " · " + ser;
+}
+function renderRoomMenu(){
+  const sel = document.getElementById("roomSel"), rooms = roomList();
+  sel.innerHTML = "";
+  rooms.forEach(c => {
+    const o = document.createElement("option");
+    o.value = c; o.textContent = "🚪 " + roomLabel(c) + " (" + roomOwnedItems(c).length + ")";
+    sel.appendChild(o);
+  });
+  sel.value = state.room;
+  sel.hidden = rooms.length === 0;
+  const mb = document.getElementById("btnMissing");
+  mb.hidden = !canShowMissing(roomCol(state.room)) || roomCol(state.room) === "musebattle";
+  mb.textContent = state.showMissing ? "🙈 Hide missing" : "👻 Show missing";
+  mb.classList.toggle("on", state.showMissing);
+}
+async function openRoom(){
+  currentItems(); // validates state.room
+  const col = roomCol(state.room);
+  if (missingOn(col) && !catalogs[col]){
+    setStatus("⏳ Loading the full collection…");
+    await loadCatalog(col);
+  }
+  const items = currentItems();
+  renderRoomMenu(); updateTitle();
+  buildRoom(items);
+}
+
+const gridEl = document.getElementById("grid");
+function renderEditor(){
+  document.getElementById("curatorName").value = state.curator;
+  document.querySelectorAll(".sizes button").forEach(b => b.classList.toggle("on", +b.dataset.size === state.size));
+  const cols = ownedCollections();
+  if (!cols.includes(state.filter)) state.filter = cols.includes(state.room) ? state.room : (cols[0] || "");
+  const colSel = document.getElementById("colSel");
+  colSel.innerHTML = "";
+  cols.forEach(c => {
+    const o = document.createElement("option");
+    const owned = state.inventory.filter(i => i.collection === c).length;
+    o.value = c; o.textContent = noLimit(c)
+      ? `${COLLECTIONS[c].label} — ${selectedIn(c).length}/${owned} shown` + (c === "onefone" ? " · one room per series" : COLLECTIONS[c].split ? " · rooms of 12" : "")
+      : `${COLLECTIONS[c].label} — ${selectedIn(c).length}/${limitFor(c)} chosen · ${owned} owned`;
+    colSel.appendChild(o);
+  });
+  colSel.value = state.filter;
+  gridEl.innerHTML = "";
+  let lastSeries = null;
+  state.inventory.filter(i => i.collection === state.filter)
+    .sort((a, b) => hasSubRooms(state.filter) ? (a.series.localeCompare(b.series, undefined, { numeric: true }) || a.tokenId - b.tokenId) : 0)
+    .forEach(item => {
+    if (hasSubRooms(state.filter) && item.series !== lastSeries){
+      lastSeries = item.series;
+      const h = document.createElement("div"); h.className = "series-head"; h.textContent = "📚 " + item.series;
+      gridEl.appendChild(h);
+    }
+    const t = document.createElement("div");
+    t.className = "tile" + (state.selected.includes(item.key) ? " on" : "");
+    const img = document.createElement("img");
+    img.alt = item.name; img.loading = "lazy";
+    img.src = item.image || placeholderURL(item);
+    const cap = document.createElement("div");
+    cap.innerHTML = `<b></b><br><span class="rar"></span>`;
+    cap.querySelector("b").textContent = item.name;
+    cap.querySelector(".rar").textContent = rarityLabel(item);
+    t.append(img, cap);
+    t.onclick = () => toggleSelect(item.key);
+    gridEl.appendChild(t);
+  });
+  updateCount();
+}
+function updateCount(){
+  document.getElementById("count").textContent = noLimit(state.filter)
+    ? `${selectedIn(state.filter).length} (all your pieces${hasSubRooms(state.filter) ? ", grouped in rooms" : ""})`
+    : `${selectedIn(state.filter).length} / ${limitFor(state.filter)}`;
+  document.getElementById("btnBuild").disabled = state.selected.length === 0;
+}
+function toggleSelect(key){
+  const i = state.selected.indexOf(key);
+  if (i >= 0) state.selected.splice(i, 1);
+  else if (selectedIn(colOf(key)).length < limitFor(colOf(key))) state.selected.push(key);
+  else { flash(`This room holds up to ${limitFor(colOf(key))} works — remove one first.`); return; }
+  renderEditor();
+}
+// cols: list of collection keys to (re)fill with their rarest works
+function pickRarest(cols){
+  cols.forEach(c => {
+    state.selected = state.selected.filter(k => colOf(k) !== c);
+    state.inventory.filter(i => i.collection === c)
+      .sort((a, b) => raritySortKey(a) - raritySortKey(b))
+      .slice(0, limitFor(c)).forEach(i => state.selected.push(i.key));
+  });
+  renderEditor();
+}
+function flash(msg){
+  const el = document.getElementById("shareMsg");
+  document.getElementById("shareBox").hidden = false;
+  el.textContent = msg;
+}
+
+document.querySelectorAll(".sizes button").forEach(b => b.onclick = () => {
+  state.size = +b.dataset.size;
+  const keep = [], per = {};
+  state.selected.forEach(k => { const c = colOf(k); per[c] = (per[c] || 0) + 1; if (per[c] <= limitFor(c)) keep.push(k); });
+  state.selected = keep;
+  renderEditor();
+});
+document.getElementById("btnRarest").onclick = () => pickRarest([state.filter]);
+document.getElementById("btnRarestAll").onclick = () => pickRarest(ownedCollections());
+document.getElementById("btnClear").onclick = () => { state.selected = state.selected.filter(k => colOf(k) !== state.filter); renderEditor(); };
+document.getElementById("colSel").onchange = e => { state.filter = e.target.value; renderEditor(); };
+document.getElementById("roomSel").onchange = e => { state.room = e.target.value; e.target.blur(); saveOwnerChoices(); openRoom(); };
+document.getElementById("curatorName").oninput = e => {
+  state.curator = cleanName(e.target.value);
+};
+document.getElementById("btnCurate").onclick = () => { state.filter = roomCol(state.room); renderEditor(); editorEl.hidden = false; };
+document.getElementById("btnMissing").onclick = async e => {
+  e.currentTarget.blur();
+  state.showMissing = !state.showMissing;
+  openRoom();
+};
+document.getElementById("btnClose").onclick = () => { editorEl.hidden = true; };
+document.getElementById("btnBuild").onclick = () => {
+  editorEl.hidden = true;
+  const first = roomList().find(r => roomCol(r) === state.filter);
+  if (first) state.room = first;
+  saveOwnerChoices(); openRoom();
+};
+document.getElementById("styleSel").onchange = e => { state.style = e.target.value; e.target.blur(); saveOwnerChoices(); openRoom(); };
+
+document.getElementById("btnShare").onclick = async () => {
+  renderEditor(); editorEl.hidden = false;
+  const url = shareURL();
+  const out = document.getElementById("shareOut");
+  document.getElementById("shareBox").hidden = false;
+  out.value = url; out.select();
+  let copied = false;
+  try { await navigator.clipboard.writeText(url); copied = true; } catch (e) {}
+  document.getElementById("shareMsg").textContent = copied ? "✅ Link copied — paste it anywhere to share your gallery." : "Select the link above and copy it.";
+};
+
+document.getElementById("btnTest").onclick = async () => {
+  const url = document.getElementById("testUrl").value.trim();
+  const out = document.getElementById("testResult");
+  if (!/^https?:\/\//.test(url)){ out.textContent = "Paste a full address starting with https://"; return; }
+  out.textContent = "Testing…";
+  const r = await probeImage(url);
+  if (r.status === "ok"){
+    out.innerHTML = "";
+    const im = document.createElement("img"); im.src = url; out.append(im, "✅ Works! This image can hang on a 3D wall. No Worker change needed.");
+  } else if (r.status === "blocked"){
+    out.textContent = "⚠️ The image exists but is blocked for 3D (CORS). A small Worker change will be needed.";
+  } else {
+    out.textContent = "❌ This address doesn't open an image here. If you are viewing this page inside the Claude chat preview, external images may be blocked there: download the file and open it in Chrome, then test again.";
+  }
+};
+
+/* ---------- start ---------- */
+function setStatus(t){ document.getElementById("status").textContent = t; }
+(async function init(){
+  resize();
+  let fromUrl = readURL();
+  document.getElementById("btnCurate").hidden = !state.canEdit;
+  document.getElementById("btnShare").hidden = !state.canEdit;
+  if (state.canEdit && state.wallet && !fromUrl.length){
+    const saved = loadOwnerChoices();
+    if (saved){
+      if (saved.curator) state.curator = cleanName(saved.curator);
+      if (["classic","pop","dark"].includes(saved.style)) state.style = saved.style;
+      if (CONFIG.SIZES.includes(saved.size)) state.size = saved.size;
+      if (Array.isArray(saved.selected)) fromUrl = saved.selected.slice(0, 120);
+      if (saved.room) state.room = saved.room;
+      // collections not seen before (older save, new collection, new airdrop) get their rarest works automatically
+      state.knownCollections = saved.v === 2 && Array.isArray(saved.known) ? saved.known : [];
+      state.fillNewRooms = true;
+    }
+  }
+  updateTitle();
+  buildRoom([]); tick();
+  if (state.wallet) setStatus("⏳ Loading NFTs…");
+
+  // visitors only need the collections used in the link
+  const onlyGroups = (!state.canEdit && fromUrl.length) ? new Set(fromUrl.map(k => k.slice(0, k.lastIndexOf("-")))) : null;
+  state.inventory = await loadOwnedNFTs(state.wallet, onlyGroups);
+
+  if (state.wallet && !state.inventory.length){
+    setStatus("No MetaMuseX/Dolly NFTs found for this wallet (or OpenSea is not answering — try again later).");
+    return;
+  }
+  const owned = new Set(state.inventory.map(i => i.key));
+  state.selected = fromUrl.filter(k => owned.has(k));
+  const hiddenCount = fromUrl.length - state.selected.length;
+  if (state.selected.length){
+    if (state.fillNewRooms){
+      const empty = ownedCollections().filter(c => !selectedIn(c).length && !state.knownCollections.includes(c));
+      const keepEditor = editorEl.hidden;
+      pickRarest(empty); editorEl.hidden = keepEditor;
+      saveOwnerChoices();
+    }
+    const most = Math.max(...roomList().filter(r => { const c = roomCol(r); return !noLimit(c) && !COLLECTIONS[c]?.airdrop; }).map(r => roomOwnedItems(r).length), 1);
+    if (!CONFIG.SIZES.includes(state.size) || state.size < most) state.size = CONFIG.SIZES.find(x => x >= most) || 12;
+  } else {
+    pickRarest(ownedCollections());
+  }
+  openRoom();
+  if (hiddenCount > 0) setStatus(`${hiddenCount} work${hiddenCount > 1 ? "s are" : " is"} no longer in this collection and ${hiddenCount > 1 ? "were" : "was"} removed.`);
+  if (state.canEdit && state.wallet && !fromUrl.length){ renderEditor(); editorEl.hidden = false; }
+})();
+</script>
+</body>
+</html>
