@@ -18,7 +18,7 @@ La mostra si gestisce dalla pagina **event-admin.html** del sito.
 
 3. **Compila la mostra**
    - **Title**: il titolo della mostra.
-   - **Short presentation**: una frase di presentazione.
+   - **Presentation text**: il testo della mostra, fino a 3000 caratteri. Può contenere descrizioni, recensioni e citazioni, e gli a capo vengono mantenuti.
    - **Opens / Closes**: data e ora di apertura e di chiusura.
    - **Artworks** (massimo 12):
      - *OpenSea link*: incolla il link della pagina dell'NFT.
