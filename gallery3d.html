@@ -814,7 +814,9 @@ const IMMERSIVE_FOR_COLLECTORS = false;
 const EVENT = "event";
 let eventCfg = null, eventItems = [];
 const isShow = room => room === IMMERSIVE || room === EVENT;
+const PREVIEW = new URLSearchParams(location.search).has("preview");   // event-admin "Preview": show it now, whatever the dates
 function eventPhase(){
+  if (PREVIEW && eventCfg && (eventCfg.works || []).length) return "open";
   if (!eventCfg || !eventCfg.active) return "none";
   const now = Date.now(), open = Date.parse(eventCfg.opensAt || "") || 0, close = Date.parse(eventCfg.closesAt || "") || Infinity;
   if (now >= close) return "none";
@@ -827,11 +829,19 @@ function openseaRef(url){   // https://opensea.io/item/polygon/0x…/25  (or /as
   return { chain, contract: m[2].toLowerCase(), id: m[3], url };
 }
 async function loadEvent(){
+  // 1) the exhibition saved from event-admin.html (Apps Script), 2) otherwise event.json on the site
   try {
-    const res = await fetch("event.json", { cache: "no-store" });
-    if (!res.ok) return;
-    eventCfg = await res.json();
-  } catch (e) { eventCfg = null; return; }
+    const res = await fetch(LEADERBOARD_API_URL + "?type=event", { cache: "no-store" });
+    const cfg = res.ok ? await res.json() : null;
+    if (cfg && typeof cfg === "object" && cfg.title !== undefined) eventCfg = cfg;
+  } catch (e) {}
+  if (!eventCfg){
+    try {
+      const res = await fetch("event.json", { cache: "no-store" });
+      if (!res.ok) return;
+      eventCfg = await res.json();
+    } catch (e) { eventCfg = null; return; }
+  }
   const works = Array.isArray(eventCfg.works) ? eventCfg.works.slice(0, IMMERSIVE_MAX) : [];
   eventItems = (await Promise.all(works.map(async (w, i) => {
     const base = { key: "event-" + i, collection: "event", tokenId: i + 1, name: String(w.name || ""), series: "", rarityCount: null, rarityTrait: "", image: "", metadataUrl: "", openseaUrl: "" };
@@ -963,7 +973,9 @@ function makeSlide(k){
   do { trans = Math.floor(Math.random() * TRANSITIONS); } while (++tries < 20 && (prev && trans === prev.trans || (trans === 0 && Math.random() < .5)));
   // one artwork on every wall is the most frequent scene (about 6 in 10), then the wrap-around, then the mix
   // always ONE artwork on every wall (sometimes wrapping the whole room); the mix happens during the transitions
-  layout = pick(["same", "same", "same", "wrap"]);
+  // how the walls are filled: chosen for each exhibition in event-admin ("single", "mix" or "alternate")
+  const wallMode = imm.items.length < 2 ? "single" : (state.room === EVENT && eventCfg && eventCfg.layout) || "single";
+  layout = pick(wallMode === "mix" ? ["walls"] : wallMode === "alternate" ? ["same", "same", "same", "wrap", "walls", "walls"] : ["same", "same", "same", "wrap"]);
   // now and then: a colour interlude, walls and ceiling painted in colours matching the next artwork
   if (k > 0 && prev && prev.layout !== "color" && Math.random() < .22) layout = "color";
   const n = imm.items.length;
@@ -980,7 +992,8 @@ function makeSlide(k){
     art: (() => {
       // the mix uses artworks with similar colours, so the walls look coherent together
       const near = colourNeighbours(main);
-      return imm.surfaces.map(() => main);
+      // "walls": the main artwork + the ones with the most similar colours; otherwise the same artwork everywhere
+      return imm.surfaces.map((sf, i) => layout !== "walls" || sf.floor ? main : sf.ceil ? near[0] : (i === 0 ? main : near[(i - 1) % near.length]));
     })(),
     // during the transition each wall passes through a different artwork with similar colours
     mid: (() => { const near = colourNeighbours(main); return imm.surfaces.map((sf, i) => near[i % near.length]); })(),
