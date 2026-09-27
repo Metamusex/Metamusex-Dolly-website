@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Community Galleries · MetaMuseX</title>
+<style>
+  :root{ --ink:#1d1b22; --paper:#fffaf3; --pink:#ff4f9a; --yellow:#ffd23f; --muted:#6b6675; --line:#e8e0d4; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  a{color:inherit}
+  header{background:var(--ink);color:#fff;padding:36px 16px 30px}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 16px}
+  header .kicker{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--yellow);font-weight:700}
+  header h1{margin:6px 0 8px;font-size:clamp(28px,5vw,44px);line-height:1.1}
+  header p{margin:0;color:#d9d3e0;max-width:640px;line-height:1.5}
+  .back{display:inline-block;margin-top:16px;color:#fff;font-weight:600;text-decoration:none;border-bottom:2px solid var(--pink)}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:24px 0 18px}
+  .bar input{flex:1;min-width:200px;font:inherit;padding:10px 14px;border-radius:999px;border:2px solid var(--ink);background:#fff}
+  .bar select{font:inherit;padding:10px 12px;border-radius:999px;border:2px solid var(--ink);background:#fff}
+  #count{color:var(--muted);font-size:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px;padding-bottom:48px}
+  .card{background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 0 0 2px var(--line);display:flex;flex-direction:column;transition:transform .15s, box-shadow .15s}
+  .card:hover{transform:translateY(-3px);box-shadow:0 0 0 2px var(--pink),0 10px 24px rgba(0,0,0,.08)}
+  .cover{aspect-ratio:4/3;background:#1c1b24 center/cover no-repeat;position:relative}
+  .cover .style{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.05em}
+  .cover .ph{position:absolute;inset:0;display:grid;place-items:center;font-size:48px}
+  .body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:6px;flex:1}
+  .curator{font-weight:800;font-size:18px}
+  .meta{font-size:13px;color:var(--muted)}
+  .enter{margin-top:auto;align-self:flex-start;background:var(--pink);color:#fff;text-decoration:none;font-weight:700;padding:9px 16px;border-radius:999px}
+  .empty{padding:40px 0;color:var(--muted);text-align:center;grid-column:1/-1}
+  .how{background:#fff;border-radius:18px;box-shadow:0 0 0 2px var(--line);padding:18px 20px;margin-bottom:48px;line-height:1.55}
+  .how h2{margin:0 0 6px;font-size:18px}
+  .how ol{margin:6px 0 0;padding-left:20px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="kicker">MetaMuseX &amp; Dolly</div>
+    <h1>Community Galleries</h1>
+    <p>Step inside the 3D galleries curated by our collectors. Every gallery is built from the pieces they really own — walk the rooms, enjoy the Immersive Room and discover new favourites.</p>
+    <a class="back" href="collector-album.html">← Back to the Collector Album</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="bar">
+    <input id="search" type="search" placeholder="Search a curator…" aria-label="Search a curator">
+    <select id="sort" aria-label="Sort">
+      <option value="recent">Recently updated</option>
+      <option value="works">Most works</option>
+      <option value="name">Curator A–Z</option>
+    </select>
+    <span id="count"></span>
+  </div>
+  <div class="grid" id="grid"><div class="empty">Loading galleries…</div></div>
+
+  <div class="how">
+    <h2>Want your gallery here?</h2>
+    <ol>
+      <li>Open the <a href="collector-album.html">Collector Album</a> and connect your wallet.</li>
+      <li>Click <b>🏛️ My 3D Gallery</b> and curate your rooms.</li>
+      <li>Press <b>🔗 Share</b>, then <b>🌍 Publish on Community Galleries</b>.</li>
+    </ol>
+  </div>
+</main>
+
+<script>
+"use strict";
+// Same Google Apps Script web app used by the Collector Album leaderboard
+const LEADERBOARD_API_URL = "https://script.google.com/macros/s/AKfycbwYPL48XHqg6XLuGuX3ICab02CtV73KUvs7JkyMzvd54Br3MwSX1M-jPA4zHFaflDQzyA/exec";
+const STYLE_NAMES = { dark: "Dark Room", classic: "Classic", pop: "Pop", harmony: "Harmony" };
+let galleries = [];
+
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const safeUrl = u => /^https:\/\//.test(u) ? u : "";
+function galleryLink(u){
+  // only links to our own gallery page are followed
+  try { const url = new URL(u, location.href); return /gallery3d\.html$/.test(url.pathname) ? "gallery3d.html" + url.search : ""; } catch (e) { return ""; }
+}
+function fmtDate(d){ const t = new Date(d); return isNaN(t) ? "" : t.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
+
+function render(){
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  const sort = document.getElementById("sort").value;
+  let list = galleries.filter(g => !q || String(g.curator).toLowerCase().includes(q));
+  if (sort === "works") list.sort((a, b) => b.works - a.works);
+  else if (sort === "name") list.sort((a, b) => String(a.curator).localeCompare(String(b.curator)));
+  else list.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  document.getElementById("count").textContent = `${list.length} galler${list.length === 1 ? "y" : "ies"}`;
+  const grid = document.getElementById("grid");
+  if (!list.length){ grid.innerHTML = `<div class="empty">${galleries.length ? "No gallery matches your search." : "No galleries published yet — be the first!"}</div>`; return; }
+  grid.innerHTML = list.map(g => {
+    const link = galleryLink(g.url); if (!link) return "";
+    const cover = safeUrl(g.cover);
+    return `<article class="card">
+      <div class="cover" style="${cover ? `background-image:url('${esc(cover)}');background-position:center top` : ""}">
+        ${cover ? "" : `<div class="ph">🏛️</div>`}
+        ${g.style ? `<span class="style">${esc(STYLE_NAMES[g.style] || g.style)}</span>` : ""}
+      </div>
+      <div class="body">
+        <div class="curator">@${esc(g.curator || "collector")}</div>
+        <div class="meta">${g.works} work${g.works === 1 ? "" : "s"} · ${g.rooms} room${g.rooms === 1 ? "" : "s"}${g.updatedAt ? " · updated " + esc(fmtDate(g.updatedAt)) : ""}</div>
+        <a class="enter" href="${esc(link)}">Enter the gallery →</a>
+      </div>
+    </article>`;
+  }).join("");
+}
+
+(async function load(){
+  try {
+    const res = await fetch(LEADERBOARD_API_URL + "?type=galleries");
+    const rows = await res.json();
+    galleries = (Array.isArray(rows) ? rows : []).map(r => ({
+      curator: String(r.curator || "").slice(0, 24), url: String(r.url || ""), cover: String(r.cover || ""),
+      works: Number(r.works) || 0, rooms: Number(r.rooms) || 0, style: String(r.style || ""), updatedAt: String(r.updatedAt || "")
+    })).filter(g => galleryLink(g.url));
+    render();
+  } catch (e) {
+    document.getElementById("grid").innerHTML = `<div class="empty">Couldn't load the galleries right now. Please try again in a moment.</div>`;
+  }
+})();
+document.getElementById("search").addEventListener("input", render);
+document.getElementById("sort").addEventListener("change", render);
+</script>
+</body>
+</html>
