@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Past Exhibitions · MetaMuseX</title>
+<meta name="description" content="The archive of the MetaMuseX & Dolly exhibitions in the Immersive Room of the 3D Gallery.">
+<style>
+  :root{ --ink:#1d1b22; --paper:#fffaf3; --pink:#ff4f9a; --yellow:#ffd23f; --muted:#6b6675; --line:#e8e0d4; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  a{color:inherit}
+  header{background:var(--ink);color:#fff;padding:36px 16px 30px}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 16px}
+  header .kicker{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--yellow);font-weight:700}
+  header h1{margin:6px 0 8px;font-size:clamp(28px,5vw,44px);line-height:1.1}
+  header p{margin:0;color:#d9d3e0;max-width:640px;line-height:1.5}
+  .links{display:flex;gap:18px;flex-wrap:wrap;margin-top:16px}
+  .back{color:#fff;font-weight:600;text-decoration:none;border-bottom:2px solid var(--pink)}
+  #list{display:grid;gap:26px;padding:30px 0 56px}
+  .ex{background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 0 0 2px var(--line);display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr)}
+  .cover{background:#15111d center/cover no-repeat;min-height:320px}
+  .body{padding:20px 22px 22px;display:flex;flex-direction:column;gap:10px;min-width:0}
+  .dates{font-size:13px;font-weight:700;color:var(--pink);letter-spacing:.04em;text-transform:uppercase}
+  .ex h2{margin:0;font-size:24px;line-height:1.2}
+  .desc{color:#4a4553;line-height:1.55;font-size:15px;white-space:pre-line}
+  .desc.short{max-height:7.8em;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent)}
+  .more{background:none;border:0;padding:0;color:var(--pink);font:inherit;font-weight:700;cursor:pointer;align-self:flex-start}
+  .video{border-radius:14px;overflow:hidden;background:#000;aspect-ratio:16/9}
+  .video iframe,.video video{width:100%;height:100%;border:0;display:block}
+  .novideo{font-size:13px;color:var(--muted)}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto;padding-top:6px}
+  .btn{display:inline-block;background:var(--pink);color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px}
+  .btn.alt{background:#fff;color:var(--ink);box-shadow:inset 0 0 0 2px var(--ink)}
+  .empty{padding:40px 0;color:var(--muted);text-align:center}
+  @media (max-width:720px){ .ex{grid-template-columns:1fr} .cover{min-height:0;aspect-ratio:4/3} }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="kicker">MetaMuseX &amp; Dolly · Immersive Room</div>
+    <h1>Past Exhibitions</h1>
+    <p>Every exhibition projected in the Immersive Room of the MetaMuseX 3D Gallery. Watch the video, or step inside and see the show again.</p>
+    <div class="links">
+      <a class="back" href="collector-album.html">← Collector Album</a>
+      <a class="back" href="galleries.html">🌍 Community Galleries</a>
+      <a class="back" href="gallery3d.html?event">🎉 Current exhibition</a>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="list"><div class="empty">Loading the exhibitions…</div></div>
+</main>
+
+<script>
+const esc = t => String(t || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// **bold** as in the exhibition description
+const rich = t => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+function dates(c){
+  const o = { day: "numeric", month: "long", year: "numeric" };
+  const a = Date.parse(c.opensAt || ""), b = Date.parse(c.closesAt || "");
+  if (!a) return "";
+  const A = new Date(a), B = b ? new Date(b) : null;
+  if (B && A.getFullYear() === B.getFullYear() && A.getMonth() === B.getMonth())
+    return `${A.getDate()} – ${B.toLocaleDateString(undefined, o)}`;
+  return A.toLocaleDateString(undefined, o) + (B ? " – " + B.toLocaleDateString(undefined, o) : "");
+}
+function videoHTML(v){
+  if (!v) return "";
+  const yt = String(v).match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/))([\w-]{11})/);
+  if (yt) return `<div class="video"><iframe src="https://www.youtube-nocookie.com/embed/${yt[1]}" title="Exhibition video" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen loading="lazy"></iframe></div>`;
+  return `<div class="video"><video src="${esc(v)}" controls preload="metadata" playsinline></video></div>`;
+}
+(async function(){
+  const list = document.getElementById("list");
+  let data = null;
+  for (let i = 0; i < 3 && !data; i++){
+    try { data = await fetch("event/archive.json?t=" + Date.now(), { cache: "no-store" }).then(r => r.json()); }
+    catch (e) { await new Promise(r => setTimeout(r, 1500)); }
+  }
+  const items = (data && data.exhibitions) || [];
+  if (!items.length){ list.innerHTML = `<div class="empty">${data ? "No past exhibitions yet — the first one is coming soon." : "Couldn't load the archive, please try again in a moment."}</div>`; return; }
+  list.innerHTML = items.map(e => {
+    const c = e.config || {}, w0 = (c.works || [])[0] || {}, cover = e.cover || w0.image || "";
+    // the cover is centred on the face chosen in event-admin (🎯)
+    const pos = isFinite(w0.fx) && isFinite(w0.fy) ? `${Math.round(w0.fx * 100)}% ${Math.round(Math.max(0, w0.fy - .08) * 100)}%` : "center";
+    return `<article class="ex">
+      <div class="cover" style="background-image:url('${esc(cover)}');background-position:${pos}" role="img" aria-label="${esc(e.title || c.title)}"></div>
+      <div class="body">
+        <div class="dates">${esc(dates(c))}</div>
+        <h2>${esc(e.title || c.title)}</h2>
+        ${c.subtitle ? `<div class="desc short">${rich(c.subtitle)}</div><button class="more">Read more</button>` : ""}
+        ${e.video ? videoHTML(e.video) : `<div class="novideo">🎬 The video of the exhibition is coming soon.</div>`}
+        <div class="actions"><a class="btn" href="gallery3d.html?archive=${encodeURIComponent(e.id)}">🏛️ Enter the exhibition</a></div>
+      </div>
+    </article>`;
+  }).join("");
+  list.querySelectorAll(".more").forEach(b => b.onclick = () => {
+    const d = b.previousElementSibling, open = d.classList.toggle("short");
+    b.textContent = open ? "Read more" : "Show less";
+  });
+})();
+</script>
+</body>
+</html>
