@@ -1,0 +1,38 @@
+{
+ "_howto": "Archive of past exhibitions, shown on exhibitions.html. Newest first. 'video' = a YouTube link or a video file in the event folder (leave empty if there is none yet).",
+ "exhibitions": [
+  {
+   "id": "muse-battle-2026",
+   "title": "New Muse Battle Premiere",
+   "cover": "event/Muse_Battle.jpg",
+   "video": "https://youtu.be/gjg493HYg_k",
+   "config": {
+    "active": true,
+    "title": "New Muse Battle Premiere",
+    "subtitle": "Introducing the new NFT created exclusively for Muse Battle winners! 🏆\n\nThe theme remains the same as the current season: a **thrilling Wild West showdown, where freedom meets fire and legends are forged.**\n\nThis young gunslinger fears no one. The only question is: **what’s more lethal — her pistols or her charm?** 🔥🤠\n\nAvailable starting with the next battles, with only **15 copies ever created**.\n\nGood luck, Muses! ⚔️",
+    "opensAt": "2026-10-09T17:00:00.000Z",
+    "closesAt": "2026-10-18T17:00:00.000Z",
+    "layout": "single",
+    "texts": [
+     "A new Muse is born.",
+     "Fire.",
+     "Sensuality."
+    ],
+    "music": [
+     "gallery-music-10.mp3",
+     "gallery-music-3.mp3"
+    ],
+    "works": [
+     {
+      "image": "event/Muse_Battle.jpg",
+      "name": "Muse Battle",
+      "fx": 0.467,
+      "fy": 0.109,
+      "fit": "fill"
+     }
+    ],
+    "finaleVideo": "event/finale-hd.mp4"
+   }
+  }
+ ]
+}
