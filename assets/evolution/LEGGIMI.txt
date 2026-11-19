@@ -1,0 +1,20 @@
+Cartella delle immagini dell'Evolution Lab (sito: assets/evolution/)
+Tutte PNG trasparenti, quadrate, 2462x2462 come i livelli originali dei Men.
+
+awakened/                      livello 1 (un tratto sovrapposto al Men)
+  coffee-octopus.png           polpo con la tazza GM
+  option-2.png                 secondo oggetto (da disegnare)
+
+transcendent/                  livello 2: ogni tema sostituisce in automatico i suoi tratti; lo sfondo resta quello originale del Men
+  teddy-boy/
+    hat.png                    cappello orsetto con capelli  -> "Hair and hat: Teddy Boy"
+    outfit.png                 felpa orsetto                 -> "Clothes: Teddy Boy"
+                               (sfondo, corpo, occhi, bocca, occhiali, accessori e animali restano quelli del Men;
+                                non disponibile per Men con chitarra, racchetta, arco e frecce, katana, pistola ad acqua, moto o procione)
+  theme-2/                     secondo tema: stessi nomi di file
+
+men-layers/                    livelli originali che mancavano sul sito (gli altri sono gia' in assets/relax/layers/)
+  background/                  35 sfondi, es. "Background#34.jpg"
+  pet/                         5 animali, es. "Pet#02.png"
+
+Per aggiungere varianti o un tema nuovo: dirlo a Claude, che aggiorna l'album.
